@@ -15,6 +15,9 @@ ACCESS_TOKEN = os.getenv("STOCK_TOOL_TOKEN", "").strip()
 HTTP_TIMEOUT = float(os.getenv("STOCK_TOOL_TIMEOUT", "12"))
 HTTP_RETRY = 3
 HTTP_BACKOFF = float(os.getenv("STOCK_TOOL_BACKOFF", "0.8"))  # 重试间隔基数（秒）
+# 行情源优先级。海外服务器上东财会被重定向到 push2delay（延时行情），
+# 那种环境设为 tencent 直接取实时行情；auto 表示按 东财→腾讯→新浪 依次尝试。
+QUOTE_SOURCE = os.getenv("STOCK_TOOL_QUOTE_SOURCE", "auto").strip().lower()
 # 公开接口没有配额说明，留出间隔降低被限流的概率。
 REQUEST_INTERVAL = float(os.getenv("STOCK_TOOL_INTERVAL", "0.35"))
 

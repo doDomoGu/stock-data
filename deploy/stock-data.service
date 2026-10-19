@@ -11,6 +11,8 @@ Type=simple
 WorkingDirectory=/opt/stock-data
 Environment=STOCK_TOOL_DATA=/opt/stock-data/data
 Environment=STOCK_TOOL_INTERVAL=0.35
+# 海外服务器上东财行情会走延时源，设为 tencent 取实时行情
+Environment=STOCK_TOOL_QUOTE_SOURCE=tencent
 Environment=TZ=Asia/Shanghai
 # 公网部署时取消下一行注释并改成自己的口令
 # Environment=STOCK_TOOL_TOKEN=change-me

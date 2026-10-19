@@ -61,6 +61,12 @@ uv pip install --python .venv/bin/python -r requirements.txt
 | `STOCK_TOOL_TIMEOUT` | `12` | 单次请求超时（秒） |
 | `STOCK_TOOL_BACKOFF` | `0.8` | 重试间隔基数（秒） |
 | `STOCK_TOOL_INTERVAL` | `0.35` | 两次出网请求的最小间隔（秒），用于降低被数据源限流的概率 |
+| `STOCK_TOOL_QUOTE_SOURCE` | `auto` | 实时行情源优先级：`auto`=东财→腾讯→新浪；海外服务器建议设 `tencent` |
+
+### 海外服务器要注意的两点（实测）
+
+1. **东方财富的实时行情会被重定向到延时行情**：从海外 IP 请求 `push2.eastmoney.com` 会返回 302 跳到 `push2delay.eastmoney.com`，数据是延时的。这类环境把 `STOCK_TOOL_QUOTE_SOURCE=tencent`，直接取腾讯的实时行情（实测腾讯源 0.04~0.1s、数据实时；日线/财报/估值接口不受影响，仍是东财）。
+2. **新浪行情对部分海外 IP 返回 403**，所以它只作为最后兜底，不适合当主力源。
 
 ## 接口
 

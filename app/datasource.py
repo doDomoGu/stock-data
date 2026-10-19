@@ -75,6 +75,25 @@ def _get(url: str, params: dict[str, Any] | None = None, referer: str | None = N
     raise DataSourceError(f"数据源请求失败：{url}（{last_error}）")
 
 
+def _get_text(url: str, referer: str | None = None, encoding: str = "gbk") -> str:
+    """纯文本接口（腾讯/新浪的行情是 GBK 文本，不是 JSON）。"""
+    last_error: Exception | None = None
+    for attempt in range(config.HTTP_RETRY):
+        _throttle()
+        try:
+            resp = _session.get(
+                url, timeout=config.HTTP_TIMEOUT,
+                headers={"Referer": referer} if referer else None,
+            )
+            resp.raise_for_status()
+            return resp.content.decode(encoding, errors="ignore")
+        except Exception as exc:
+            last_error = exc
+            _rotate_session()
+            time.sleep(config.HTTP_BACKOFF * (attempt + 1) + random.uniform(0, 0.3))
+    raise DataSourceError(f"数据源请求失败：{url}（{last_error}）")
+
+
 def _num(value: Any) -> float | None:
     if value is None or value == "" or value == "-":
         return None
@@ -104,19 +123,14 @@ def to_secid(code: str) -> str:
 _QUOTE_FIELDS = "f43,f44,f45,f46,f47,f48,f50,f57,f58,f60,f116,f117,f162,f167,f168,f169,f170,f171"
 
 
-def fetch_quote(code: str) -> dict:
-    code = normalize_code(code)
-    try:
-        raw = _get(
-            "https://push2.eastmoney.com/api/qt/stock/get",
-            {"secid": to_secid(code), "fltt": 2, "invt": 2, "fields": _QUOTE_FIELDS},
-        )
-    except DataSourceError:
-        # 行情最影响体验，主源不可用时直接换备用源，不让首屏空着
-        return fetch_quote_sina(code)
+def fetch_quote_eastmoney(code: str) -> dict:
+    raw = _get(
+        "https://push2.eastmoney.com/api/qt/stock/get",
+        {"secid": to_secid(code), "fltt": 2, "invt": 2, "fields": _QUOTE_FIELDS},
+    )
     data = (raw or {}).get("data") or {}
     if not data:
-        return fetch_quote_sina(code)
+        raise DataSourceError(f"东方财富行情为空：{code}")
     return {
         "code": code,
         "name": data.get("f58"),
@@ -140,23 +154,47 @@ def fetch_quote(code: str) -> dict:
     }
 
 
+def fetch_quote_tencent(code: str) -> dict:
+    """腾讯行情：海外服务器上比东财快，且不会像东财那样被重定向到延时行情。"""
+    text = _get_text(f"https://qt.gtimg.cn/q={symbol_prefix(code)}{code}", referer="https://gu.qq.com/")
+    match = re.search(r'"(.*)"', text)
+    if not match or not match.group(1):
+        raise DataSourceError(f"腾讯行情无数据：{code}")
+    f = match.group(1).split("~")
+    if len(f) < 47:
+        raise DataSourceError(f"腾讯行情字段异常：{code}")
+
+    def pick(index: int) -> float | None:
+        return _num(f[index]) if index < len(f) else None
+
+    amount_wan, market_cap_yi, float_cap_yi = pick(37), pick(45), pick(44)
+    return {
+        "code": code,
+        "name": f[1] or None,
+        "price": pick(3),
+        "change": pick(31),
+        "pct_chg": pick(32),
+        "open": pick(5),
+        "high": pick(33),
+        "low": pick(34),
+        "prev_close": pick(4),
+        # 腾讯的成交量单位已是手，成交额单位是万元，市值单位是亿元
+        "volume": pick(36),
+        "amount": None if amount_wan is None else round(amount_wan * 10000, 2),
+        "volume_ratio": pick(49),
+        "turnover": pick(38),
+        "amplitude": pick(43),
+        "market_cap": None if market_cap_yi is None else round(market_cap_yi * 1e8, 2),
+        "float_market_cap": None if float_cap_yi is None else round(float_cap_yi * 1e8, 2),
+        "pe_dynamic": pick(39),
+        "pb": pick(46),
+        "source": "tencent",
+    }
+
+
 def fetch_quote_sina(code: str) -> dict:
-    url = f"https://hq.sinajs.cn/list={symbol_prefix(code)}{code}"
-    last_error: Exception | None = None
-    for attempt in range(config.HTTP_RETRY):
-        _throttle()
-        try:
-            resp = _session.get(url, headers={"Referer": "https://finance.sina.com.cn"},
-                                timeout=config.HTTP_TIMEOUT)
-            resp.raise_for_status()
-            break
-        except Exception as exc:
-            last_error = exc
-            _rotate_session()
-            time.sleep(config.HTTP_BACKOFF * (attempt + 1) + random.uniform(0, 0.3))
-    else:
-        raise DataSourceError(f"新浪行情请求失败：{code}（{last_error}）")
-    text = resp.content.decode("gbk", errors="ignore")
+    text = _get_text(f"https://hq.sinajs.cn/list={symbol_prefix(code)}{code}",
+                     referer="https://finance.sina.com.cn")
     match = re.search(r'"(.*)"', text)
     if not match or not match.group(1):
         raise DataSourceError(f"新浪行情无数据：{code}")
@@ -175,6 +213,32 @@ def fetch_quote_sina(code: str) -> dict:
         "market_cap": None, "float_market_cap": None, "pe_dynamic": None, "pb": None,
         "source": "sina",
     }
+
+
+# 默认顺序：东财 → 腾讯 → 新浪。东财对海外 IP 会重定向到 push2delay（延时行情），
+# 那类服务器上把 STOCK_TOOL_QUOTE_SOURCE 设为 tencent，直接取腾讯的实时行情。
+_QUOTE_PROVIDERS = {
+    "eastmoney": fetch_quote_eastmoney,
+    "tencent": fetch_quote_tencent,
+    "sina": fetch_quote_sina,
+}
+
+
+def fetch_quote(code: str) -> dict:
+    code = normalize_code(code)
+    preferred = config.QUOTE_SOURCE.strip().lower()
+    if preferred in _QUOTE_PROVIDERS:
+        order = [preferred] + [name for name in _QUOTE_PROVIDERS if name != preferred]
+    else:
+        order = ["eastmoney", "tencent", "sina"]
+
+    errors: list[str] = []
+    for name in order:
+        try:
+            return _QUOTE_PROVIDERS[name](code)
+        except DataSourceError as exc:
+            errors.append(f"{name}: {exc}")
+    raise DataSourceError("行情主备源均不可用：" + "；".join(errors))
 
 
 # ---------------------------------------------------------------- 日线/周线/月线

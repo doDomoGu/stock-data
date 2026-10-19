@@ -13,6 +13,8 @@ services:
       # 部署到公网建议设置访问口令，留空则不校验
       STOCK_TOOL_TOKEN: "${STOCK_TOOL_TOKEN:-}"
       STOCK_TOOL_INTERVAL: "0.35"
+      # 海外服务器上东财行情会走延时源，设为 tencent 取实时行情
+      STOCK_TOOL_QUOTE_SOURCE: "${STOCK_TOOL_QUOTE_SOURCE:-auto}"
       TZ: Asia/Shanghai
     volumes:
       # 相对 compose 文件所在目录：数据落在仓库根目录的 data/
