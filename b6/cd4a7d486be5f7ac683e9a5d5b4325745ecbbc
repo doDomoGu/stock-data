@@ -1,0 +1,30 @@
+deploy/stock-data.service
+  s_b9b6c5d78257c8::t_49c2f8830e7014 14-15
+app/datasource.py
+  s_b9b6c5d78257c8::t_a85aa014ed7e64 78-96
+  s_b9b6c5d78257c8::t_2c665f7fb70b1b 126-130,133,157-194,196-197,218-241
+app/config.py
+  s_b9b6c5d78257c8::t_79c796b503119a 18-20
+README.md
+  s_b9b6c5d78257c8::t_5916f0de3227d6 64-69
+deploy/docker-compose.yml
+  s_b9b6c5d78257c8::t_db711068d77b25 16-17
+deploy/dodomogu.d/stock.conf
+  s_b9b6c5d78257c8::t_d97bb581b99b63 1-27
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.50-trip",
+  "base_commit_sha": "b6cd4a7d486be5f7ac683e9a5d5b4325745ecbbc",
+  "prompts": {},
+  "sessions": {
+    "s_b9b6c5d78257c8": {
+      "agent_id": {
+        "tool": "chengxiaobang",
+        "id": "s_8xpepwftd0sz",
+        "model": "auto(free)"
+      },
+      "human_author": "gulingjun <gulingjun@trip.com>"
+    }
+  }
+}
