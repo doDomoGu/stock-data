@@ -83,11 +83,18 @@ uv pip install --python .venv/bin/python -r requirements.txt
 ### 方案 A：Docker Compose（推荐）
 
 ```bash
-# 在 ECS 上
+# 在 ECS 上，脚本幂等，可反复执行
+git clone git@github.com:doDomoGu/stock-data.git && cd stock-data
+sudo bash deploy/deploy.sh
+```
+
+`deploy.sh` 会依次：检查 Docker（未安装时提示安装命令，或设 `ALLOW_INSTALL_DOCKER=1` 自动装）→ 生成访问口令写入 `deploy/.env` → 构建并启动容器 → 轮询 `/api/health` 直到就绪 → 打印容器状态与下一步。想指定口令用 `sudo STOCK_TOOL_TOKEN=你的口令 bash deploy/deploy.sh`。
+
+等价的原始命令：
+
+```bash
 sudo yum install -y docker git || sudo apt-get install -y docker.io git
 sudo systemctl enable --now docker
-git clone git@github.com:doDomoGu/stock-data.git && cd stock-data
-
 cp deploy/.env.example deploy/.env && vi deploy/.env     # 设置访问口令
 docker compose -f deploy/docker-compose.yml up -d --build
 docker compose -f deploy/docker-compose.yml logs -f      # 看启动日志
