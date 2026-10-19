@@ -1,0 +1,75 @@
+requirements.txt
+  s_b9b6c5d78257c8::t_e5b08319c143a9 1-3
+scripts/warm_cache.py
+  s_b9b6c5d78257c8::t_04b4aab50aae8e 1-45
+run.sh
+  s_b9b6c5d78257c8::t_f3672cb2bc713d 1-15
+deploy/nginx.conf
+  s_b9b6c5d78257c8::t_e24017cebb1d54 1-11,14-15,17,24-35
+  s_b9b6c5d78257c8::t_908ff1ef79fc28 12-13,16,18-23
+deploy/stock-data.service
+  s_b9b6c5d78257c8::t_d264394e505266 1-24
+web/app.js
+  s_b9b6c5d78257c8::t_c5c07f22fdd0a2 268-272
+  s_b9b6c5d78257c8::t_d78b603b4bcf70 128-131
+  s_b9b6c5d78257c8::t_ac16058b8151f3 340
+  s_b9b6c5d78257c8::t_31c1f1b7d1aa13 445-446
+  s_b9b6c5d78257c8::t_7fd53e422c2712 338-339
+  s_b9b6c5d78257c8::t_0e1f6811620400 305-307
+README.md
+  s_b9b6c5d78257c8::t_30cc1e73800ff1 18
+  s_b9b6c5d78257c8::t_a681a1ec69b344 1-17,19-163
+scripts/selfcheck.py
+  s_b9b6c5d78257c8::t_8536b39663d4cb 1-73
+app/main.py
+  s_b9b6c5d78257c8::t_f9d3561bb23c38 37-38,43-44,46-49
+  s_b9b6c5d78257c8::t_fb5a71cfbc4e0e 39-42,45
+  s_b9b6c5d78257c8::t_45eae4b750c42b 60-88,95
+  s_b9b6c5d78257c8::t_5fc9c15f0f052f 163-169
+  s_b9b6c5d78257c8::t_be4b7066e73eba 247-317
+  s_b9b6c5d78257c8::t_a4d92a9fd6ec74 94,96-119
+web/style.css
+  s_b9b6c5d78257c8::t_760e6d4824b912 85-86
+app/datasource.py
+  s_b9b6c5d78257c8::t_a45ddee0404630 34-74
+  s_b9b6c5d78257c8::t_3779e62b85170c 9
+  s_b9b6c5d78257c8::t_e8208ca42b28c8 144
+  s_b9b6c5d78257c8::t_061b19285e2f72 145-158
+  s_b9b6c5d78257c8::t_c0fc5a3daa677d 184-257
+  s_b9b6c5d78257c8::t_a640dea9d3f99f 318-319
+  s_b9b6c5d78257c8::t_c31fcf6ca6c8c1 173
+  s_b9b6c5d78257c8::t_0bf9d9c28146f8 166-172
+  s_b9b6c5d78257c8::t_b9d418ce6f2e8d 109-116
+app/config.py
+  s_b9b6c5d78257c8::t_4e3d467e497079 17
+deploy/docker-compose.yml
+  s_b9b6c5d78257c8::t_ff060390ec70cf 18-19
+  s_b9b6c5d78257c8::t_1db721f8da3c2b 1-17,20-24
+pyproject.toml
+  s_b9b6c5d78257c8::t_675fac34d9d44b 1-13
+deploy/Dockerfile
+  s_b9b6c5d78257c8::t_5a06a26213aa5c 1-24
+app/store.py
+  s_b9b6c5d78257c8::t_e47525ceea6b2d 147-155
+  s_b9b6c5d78257c8::t_d4c962e4fcc3fc 72-82
+  s_b9b6c5d78257c8::t_978821746523cf 202-229
+  s_b9b6c5d78257c8::t_9909640cc1f95e 47-48
+deploy/.env.example
+  s_b9b6c5d78257c8::t_ebb4fdff753d7d 1-3
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.50-trip",
+  "base_commit_sha": "d4548fb58de4e78401bf964c39039117bf4b01e6",
+  "prompts": {},
+  "sessions": {
+    "s_b9b6c5d78257c8": {
+      "agent_id": {
+        "tool": "chengxiaobang",
+        "id": "s_8xpepwftd0sz",
+        "model": "auto(free)"
+      },
+      "human_author": "gulingjun <gulingjun@trip.com>"
+    }
+  }
+}
