@@ -1,0 +1,21 @@
+README.md
+  s_b9b6c5d78257c8::t_c142b74fef0a43 86,88-91,93-97
+deploy/deploy.sh
+  s_b9b6c5d78257c8::t_e15ac1801d38c3 1-83
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.50-trip",
+  "base_commit_sha": "3760722c7b70fba8c47ccd9a5735ccdc968a3afe",
+  "prompts": {},
+  "sessions": {
+    "s_b9b6c5d78257c8": {
+      "agent_id": {
+        "tool": "chengxiaobang",
+        "id": "s_8xpepwftd0sz",
+        "model": "auto(free)"
+      },
+      "human_author": "gulingjun <gulingjun@trip.com>"
+    }
+  }
+}
