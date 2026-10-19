@@ -79,8 +79,12 @@
 
   /* ------------------------------------------------------------ 网络 */
 
+  // 页面可能挂在根路径或子路径（如 https://dodomogu.com/stock/）下，
+  // 接口地址按当前目录拼相对路径，避免写死绝对路径导致子目录下 404。
+  var BASE_PATH = location.pathname.replace(/[^/]*$/, '');
+
   function api(path) {
-    var url = path;
+    var url = BASE_PATH + String(path).replace(/^\//, '');
     if (state.token) url += (url.indexOf('?') >= 0 ? '&' : '?') + 'token=' + encodeURIComponent(state.token);
     return fetch(url, { headers: { Accept: 'application/json' } }).then(function (res) {
       return res.json().catch(function () { return {}; }).then(function (body) {

@@ -114,8 +114,29 @@ systemctl status stock-data
 sudo cp deploy/nginx.conf /etc/nginx/conf.d/stock-data.conf
 sudo vi /etc/nginx/conf.d/stock-data.conf        # server_name 改成域名或公网 IP
 sudo nginx -t && sudo systemctl reload nginx
-sudo certbot --nginx -d stock.example.com        # 需要域名时再上 HTTPS
+sudo certbot --nginx -d dodomogu.com -d www.dodomogu.com   # 需要域名时再上 HTTPS
 ```
+
+### 挂到域名的子路径（如 https://dodomogu.com/stock/）
+
+前端资源与接口都用**相对路径**解析，所以同一个服务既能跑在根路径，也能挂在任意子目录下，不需要改代码或加环境变量。
+
+Nginx 只需要两段 location（完整示例见 `deploy/nginx.conf`）：
+
+```nginx
+location = /stock { return 301 /stock/; }        # 少了这个跳转，页面里的相对资源会按站点根目录解析而 404
+
+location /stock/ {
+    proxy_pass http://127.0.0.1:8000/;           # 结尾这个 / 负责剥掉 /stock 前缀
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-Proto $scheme;
+}
+```
+
+- **如果 dodomogu.com 已经有 server 块**（比如已有站点，或 certbot 生成的 443 配置）：只把 location 段并入那个 server 块，**不要整段复制**，否则 nginx 会因 `server_name` 重复而启动失败。改完先 `sudo nginx -t`。
+- 挂子路径后访问地址是 `https://dodomogu.com/stock/`；带口令时用 `https://dodomogu.com/stock/?token=你的口令`，浏览器会把口令存在本地，之后直接访问 `/stock/` 即可。
+- 路径对应关系：`/stock/` → 后端 `/`，`/stock/api/stock/601021/overview` → 后端 `/api/stock/601021/overview`，`/stock/style.css` → 后端 `/style.css`。
 
 ### 上线后建议做的三件事
 
@@ -161,3 +182,5 @@ sudo certbot --nginx -d stock.example.com        # 需要域名时再上 HTTPS
 - **接口返回 503**：主备数据源同时不可用且本机无缓存。先看响应里的 `detail`，稍后重试；预热过缓存后基本不会再出现。
 - **页面数据看着旧**：响应里的 `cached`/`degraded`/`stale` 字段会说明数据来自缓存；点右上角刷新按钮可强制回源。
 - **前端改了没生效**：`style.css`/`app.js` 已设置为每次校验（`Cache-Control: no-cache`），浏览器普通刷新即可。
+- **子路径下页面白屏或样式丢失**：多半是 nginx 少了 `location = /stock { return 301 /stock/; }`（访问时没带结尾斜杠），或 `proxy_pass` 结尾漏了 `/` 导致 `/stock` 前缀没被剥掉。
+- **nginx 启动报 `conflicting server name`**：把 `deploy/nginx.conf` 整段复制进了已有 server 块的配置里，改成只并入 location 段。

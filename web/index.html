@@ -7,7 +7,8 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <title>股票分析看板</title>
-  <link rel="stylesheet" href="/style.css">
+  <!-- 用相对路径引用资源：页面挂在根路径或子路径（如 /stock/）下都能正常加载 -->
+  <link rel="stylesheet" href="style.css">
 </head>
 <body>
   <header class="topbar">
@@ -139,7 +140,7 @@
 
   <div class="toast" id="toast" hidden></div>
 
-  <script src="/vendor/echarts.min.js"></script>
-  <script src="/app.js"></script>
+  <script src="vendor/echarts.min.js"></script>
+  <script src="app.js"></script>
 </body>
 </html>
