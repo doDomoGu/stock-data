@@ -129,7 +129,9 @@
     var main = el('div', 'price-main');
     var left = el('div');
     left.appendChild(el('div', 'price-value ' + trendClass(quote.pct_chg), num(quote.price)));
-    var sourceNote = quote.source === 'sina' ? '新浪（备用源）' : '东方财富';
+    // 行情源名称按实际来源显示，避免新增源后被笼统标成主源
+    var SOURCE_LABEL = { eastmoney: '东方财富', tencent: '腾讯', sina: '新浪' };
+    var sourceNote = SOURCE_LABEL[quote.source] || quote.source || '未知源';
     if (quote.stale) sourceNote += ' · 缓存数据';
     else if (quote.fields_filled) sourceNote += ' · 部分字段由缓存补齐';
     left.appendChild(el('div', 'metric__label', '数据源：' + sourceNote +

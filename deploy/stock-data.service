@@ -14,11 +14,14 @@ Environment=STOCK_TOOL_INTERVAL=0.35
 # 海外服务器上东财行情会走延时源，设为 tencent 取实时行情
 Environment=STOCK_TOOL_QUOTE_SOURCE=tencent
 Environment=TZ=Asia/Shanghai
-# 公网部署时取消下一行注释并改成自己的口令
-# Environment=STOCK_TOOL_TOKEN=change-me
+# 访问口令等敏感配置写在 deploy/.env（已在 .gitignore 里，不进仓库）
+EnvironmentFile=-/opt/stock-data/deploy/.env
 ExecStart=/opt/stock-data/.venv/bin/python -m uvicorn app.main:app --host 127.0.0.1 --port 8000 --workers 1
 Restart=always
 RestartSec=3
+# 小内存机器上给服务设上限：万一跑飞了，系统只会杀这个服务，不影响同机其他站点
+MemoryMax=240M
+MemoryHigh=180M
 # 用 ecs-user 等非 root 账号运行时需放开数据目录权限：chown -R ecs-user /opt/stock-data/data
 User=root
 
