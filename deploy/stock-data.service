@@ -1,0 +1,24 @@
+# 非容器部署：把项目放在 /opt/stock-data 后启用本服务
+#   sudo cp deploy/stock-data.service /etc/systemd/system/
+#   sudo systemctl daemon-reload && sudo systemctl enable --now stock-data
+[Unit]
+Description=stock-data 股票分析看板
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/stock-data
+Environment=STOCK_TOOL_DATA=/opt/stock-data/data
+Environment=STOCK_TOOL_INTERVAL=0.35
+Environment=TZ=Asia/Shanghai
+# 公网部署时取消下一行注释并改成自己的口令
+# Environment=STOCK_TOOL_TOKEN=change-me
+ExecStart=/opt/stock-data/.venv/bin/python -m uvicorn app.main:app --host 127.0.0.1 --port 8000 --workers 1
+Restart=always
+RestartSec=3
+# 用 ecs-user 等非 root 账号运行时需放开数据目录权限：chown -R ecs-user /opt/stock-data/data
+User=root
+
+[Install]
+WantedBy=multi-user.target

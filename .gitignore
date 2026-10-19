@@ -1,0 +1,15 @@
+# 运行环境
+.venv/
+__pycache__/
+*.pyc
+
+# 本地行情缓存（SQLite），不随代码入库
+data/
+*.db
+*.db-wal
+*.db-shm
+
+# 部署与本地配置
+.env
+*.log
+.DS_Store

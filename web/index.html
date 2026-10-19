@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1, user-scalable=no">
+  <meta name="theme-color" content="#0b0f14">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <title>股票分析看板</title>
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <header class="topbar">
+    <button class="topbar__back" id="btnSearch" aria-label="搜索股票">
+      <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true">
+        <circle cx="11" cy="11" r="7" fill="none" stroke="currentColor" stroke-width="2"/>
+        <path d="M16.5 16.5 21 21" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+      </svg>
+    </button>
+    <div class="topbar__title">
+      <span id="stockName">加载中…</span>
+      <span class="topbar__code" id="stockCode"></span>
+    </div>
+    <button class="topbar__refresh" id="btnRefresh" aria-label="刷新数据">
+      <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true">
+        <path d="M20 11a8 8 0 1 0-2.3 5.7M20 5v6h-6" fill="none" stroke="currentColor" stroke-width="2"
+              stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+    </button>
+  </header>
+
+  <main id="main">
+    <!-- 概览 -->
+    <section class="tab-panel" data-panel="overview">
+      <div class="card price-card" id="priceCard">
+        <div class="skeleton skeleton--xl"></div>
+      </div>
+      <div class="card" id="keyMetrics"></div>
+      <div class="card" id="valuationCard"></div>
+      <div class="card" id="scoreCard"></div>
+      <div class="card" id="signalCard"></div>
+      <div class="card" id="riskCard"></div>
+      <details class="card notice-card">
+        <summary>数据说明</summary>
+        <ul id="noticeList"></ul>
+      </details>
+    </section>
+
+    <!-- 走势 -->
+    <section class="tab-panel" data-panel="trend" hidden>
+      <div class="toolbar">
+        <div class="seg" id="segPeriod">
+          <button class="seg__item is-active" data-value="day">日K</button>
+          <button class="seg__item" data-value="week">周K</button>
+          <button class="seg__item" data-value="month">月K</button>
+        </div>
+        <div class="seg" id="segAdjust">
+          <button class="seg__item is-active" data-value="1">前复权</button>
+          <button class="seg__item" data-value="0">不复权</button>
+        </div>
+      </div>
+      <div class="toolbar">
+        <div class="seg seg--range" id="segRange">
+          <button class="seg__item" data-value="60">3月</button>
+          <button class="seg__item" data-value="120">6月</button>
+          <button class="seg__item is-active" data-value="250">1年</button>
+          <button class="seg__item" data-value="500">2年</button>
+          <button class="seg__item" data-value="1200">全部</button>
+        </div>
+      </div>
+      <div class="card">
+        <div id="chartKline" class="chart chart--kline"></div>
+      </div>
+      <div class="card" id="techMetrics"></div>
+    </section>
+
+    <!-- 财务 -->
+    <section class="tab-panel" data-panel="financial" hidden>
+      <div class="card" id="finLatest"></div>
+      <div class="card">
+        <h3 class="card__title">营收与归母净利</h3>
+        <div id="chartRevenue" class="chart"></div>
+      </div>
+      <div class="card">
+        <h3 class="card__title">盈利能力与杠杆</h3>
+        <div id="chartProfitability" class="chart"></div>
+      </div>
+      <div class="card">
+        <h3 class="card__title">报告期明细</h3>
+        <div class="table-wrap"><table id="finTable"></table></div>
+      </div>
+    </section>
+
+    <!-- 同业 -->
+    <section class="tab-panel" data-panel="peers" hidden>
+      <div class="card" id="peerSummary"></div>
+      <div class="card">
+        <h3 class="card__title" id="peerTitle">同业对比</h3>
+        <div class="table-wrap"><table id="peerTable"></table></div>
+      </div>
+    </section>
+
+    <div class="state-block" id="stateBlock" hidden>
+      <p id="stateText"></p>
+      <button class="btn" id="btnRetry">重试</button>
+    </div>
+  </main>
+
+  <nav class="tabbar">
+    <button class="tabbar__item is-active" data-tab="overview">
+      <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M4 13h6V4H4v9Zm0 7h6v-5H4v5Zm10 0h6V11h-6v9Zm0-16v5h6V4h-6Z" fill="currentColor"/></svg>
+      <span>概览</span>
+    </button>
+    <button class="tabbar__item" data-tab="trend">
+      <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M4 19h16v-1.5H5.5V5H4v14Zm3-3 3.5-4 3 2.5L19 8.5 17.8 7.4l-5 4.6-3-2.5L5.8 14 7 15.2Z" fill="currentColor"/></svg>
+      <span>走势</span>
+    </button>
+    <button class="tabbar__item" data-tab="financial">
+      <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M4 20h16v-1.5H5.5V4H4v16Zm3.5-2.5h2.5V10H7.5v7.5Zm4.5 0h2.5V6H12v11.5Zm4.5 0H19V13h-2.5v4.5Z" fill="currentColor"/></svg>
+      <span>财务</span>
+    </button>
+    <button class="tabbar__item" data-tab="peers">
+      <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M8 11a3 3 0 1 0 0-6 3 3 0 0 0 0 6Zm8 0a3 3 0 1 0 0-6 3 3 0 0 0 0 6ZM8 13c-3 0-6 1.5-6 3.5V19h12v-2.5C14 14.5 11 13 8 13Zm8 0c-.6 0-1.2.05-1.7.15 1.05.9 1.7 2 1.7 3.35V19h6v-2.5c0-2-3-3.5-6-3.5Z" fill="currentColor"/></svg>
+      <span>同业</span>
+    </button>
+  </nav>
+
+  <!-- 搜索层 -->
+  <div class="search" id="searchLayer" hidden>
+    <div class="search__bar">
+      <input id="searchInput" type="search" inputmode="search" placeholder="输入股票代码或名称，如 601021 / 春秋航空"
+             autocomplete="off" enterkeyhint="search">
+      <button class="search__cancel" id="btnSearchCancel">取消</button>
+    </div>
+    <ul class="search__results" id="searchResults"></ul>
+    <p class="search__hint">最近查看</p>
+    <ul class="search__results" id="recentList"></ul>
+  </div>
+
+  <div class="toast" id="toast" hidden></div>
+
+  <script src="/vendor/echarts.min.js"></script>
+  <script src="/app.js"></script>
+</body>
+</html>
