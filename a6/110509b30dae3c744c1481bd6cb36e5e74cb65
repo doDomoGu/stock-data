@@ -1,0 +1,27 @@
+web/app.js
+  s_b9b6c5d78257c8::t_1f11d22a11c860 82-85,87
+README.md
+  s_b9b6c5d78257c8::t_8e8f7b4a1bf9f6 117,120-139
+  s_b9b6c5d78257c8::t_02fbbdebef0ee9 185-186
+deploy/nginx.conf
+  s_b9b6c5d78257c8::t_45ea7f1a4a7041 1-9,12-13,15-16,18-20,23-25,27-28,31-36
+web/index.html
+  s_b9b6c5d78257c8::t_85d7a742b5f825 10-11
+  s_b9b6c5d78257c8::t_835526b0bb04ac 143-144
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.50-trip",
+  "base_commit_sha": "a6110509b30dae3c744c1481bd6cb36e5e74cb65",
+  "prompts": {},
+  "sessions": {
+    "s_b9b6c5d78257c8": {
+      "agent_id": {
+        "tool": "chengxiaobang",
+        "id": "s_8xpepwftd0sz",
+        "model": "auto(free)"
+      },
+      "human_author": "gulingjun <gulingjun@trip.com>"
+    }
+  }
+}
