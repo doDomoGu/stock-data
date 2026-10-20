@@ -1,0 +1,23 @@
+deploy/dodomogu.d/traffic.conf
+  s_b9b6c5d78257c8::t_686bee8bfe2da5 1-20
+deploy/traffic-report.sh
+  s_b9b6c5d78257c8::t_316575b63450c1 1-28,35-40,42,52-54
+  s_b9b6c5d78257c8::t_14c62b9e758851 29-31
+  s_b9b6c5d78257c8::t_7c4991301acbfe 32-34,41,43-51,55-56
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.50-trip",
+  "base_commit_sha": "6f3338fd0ab37735060b4e2060b42eb838764165",
+  "prompts": {},
+  "sessions": {
+    "s_b9b6c5d78257c8": {
+      "agent_id": {
+        "tool": "chengxiaobang",
+        "id": "s_8xpepwftd0sz",
+        "model": "auto(free)"
+      },
+      "human_author": "gulingjun <gulingjun@trip.com>"
+    }
+  }
+}
