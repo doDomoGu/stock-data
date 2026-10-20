@@ -87,9 +87,9 @@ def _fill_missing_quote(code: str, data: dict) -> dict:
     return data
 
 
-def get_quote(code: str) -> dict:
+def get_quote(code: str, force: bool = False) -> dict:
     key = f"quote:{code}"
-    cached = store.cache_get(key, config.TTL_QUOTE)
+    cached = None if force else store.cache_get(key, config.TTL_QUOTE)
     if cached:
         return cached
     try:
@@ -106,10 +106,10 @@ def get_quote(code: str) -> dict:
     return data
 
 
-def get_kline(code: str, klt: int, fqt: int, limit: int) -> tuple[list[dict], bool]:
-    """返回 (K线, 是否来自缓存)。"""
+def get_kline(code: str, klt: int, fqt: int, limit: int, force: bool = False) -> tuple[list[dict], bool]:
+    """返回 (K线, 是否来自缓存)。force=True 时忽略同步 TTL，立即回源。"""
     sync_key = f"kline_sync:{code}:{klt}:{fqt}"
-    need_sync = store.cache_get(sync_key, config.TTL_KLINE) is None
+    need_sync = force or store.cache_get(sync_key, config.TTL_KLINE) is None
     rows = store.load_kline(code, klt, fqt, limit)
     if need_sync or not rows:
         try:
@@ -156,9 +156,9 @@ def get_valuation(code: str) -> tuple[list[dict], bool]:
     return store.load_valuation(code), False
 
 
-def get_peers(code: str) -> dict:
+def get_peers(code: str, force: bool = False) -> dict:
     key = f"peers:{code}"
-    cached = store.cache_get(key, config.TTL_PEERS)
+    cached = None if force else store.cache_get(key, config.TTL_PEERS)
     if cached:
         return cached
     try:
@@ -188,10 +188,10 @@ def search(q: str = Query(..., min_length=1), count: int = 8):
 
 
 @app.get("/api/stock/{code}/quote")
-def quote(code: str):
+def quote(code: str, refresh: int = 0):
     try:
         norm = datasource.normalize_code(code)
-        return _ok(get_quote(norm))
+        return _ok(get_quote(norm, force=bool(refresh)))
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except DataSourceError as exc:
@@ -200,14 +200,14 @@ def quote(code: str):
 
 @app.get("/api/stock/{code}/kline")
 def kline(code: str, period: str = "day", adjust: int = 1,
-          limit: int = Query(520, ge=30, le=config.MAX_KLINE)):
+          limit: int = Query(520, ge=30, le=config.MAX_KLINE), refresh: int = 0):
     if period not in datasource.KLT:
         raise HTTPException(status_code=400, detail=f"period 仅支持 {list(datasource.KLT)}")
     if adjust not in (0, 1, 2):
         raise HTTPException(status_code=400, detail="adjust 仅支持 0(不复权)/1(前复权)/2(后复权)")
     try:
         code = datasource.normalize_code(code)
-        rows, from_cache = get_kline(code, datasource.KLT[period], adjust, limit)
+        rows, from_cache = get_kline(code, datasource.KLT[period], adjust, limit, force=bool(refresh))
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except DataSourceError as exc:
@@ -235,18 +235,22 @@ def financials(code: str, limit: int = Query(8, ge=1, le=12)):
 
 
 @app.get("/api/stock/{code}/peers")
-def peers(code: str):
+def peers(code: str, refresh: int = 0):
     try:
         code = datasource.normalize_code(code)
-        return _ok(get_peers(code))
+        return _ok(get_peers(code, force=bool(refresh)))
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except DataSourceError as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
 
 
-def _collect(code: str, period: str, adjust: int, limit: int) -> tuple[dict, list[str]]:
-    """按依赖顺序取数；单个数据源失败就降级，不拖垮整页。"""
+def _collect(code: str, period: str, adjust: int, limit: int, force: bool = False) -> tuple[dict, list[str]]:
+    """按依赖顺序取数；单个数据源失败就降级，不拖垮整页。
+
+    force=True 用于手动刷新：行情、K 线、同业立即回源，不看缓存 TTL。
+    财报与估值历史变化慢（6~12 小时）、体积也大，仍按原 TTL 走。
+    """
     quote_data: dict = {}
     rows: list[dict] = []
     fin_rows: list[dict] = []
@@ -255,11 +259,11 @@ def _collect(code: str, period: str, adjust: int, limit: int) -> tuple[dict, lis
     degraded: list[str] = []
 
     steps = [
-        ("行情", lambda: get_quote(code), "quote"),
-        ("K线", lambda: get_kline(code, datasource.KLT[period], adjust, limit), "rows"),
+        ("行情", lambda: get_quote(code, force=force), "quote"),
+        ("K线", lambda: get_kline(code, datasource.KLT[period], adjust, limit, force=force), "rows"),
         ("财报", lambda: get_financials(code, 8), "financials"),
         ("估值", lambda: get_valuation(code), "valuation"),
-        ("同业", lambda: get_peers(code), "peers"),
+        ("同业", lambda: get_peers(code, force=force), "peers"),
     ]
     for label, fn, target in steps:
         try:
@@ -284,7 +288,8 @@ def _collect(code: str, period: str, adjust: int, limit: int) -> tuple[dict, lis
 
 
 @app.get("/api/stock/{code}/analysis")
-def analyze(code: str, period: str = "day", adjust: int = 1, limit: int = Query(520, ge=60, le=config.MAX_KLINE)):
+def analyze(code: str, period: str = "day", adjust: int = 1,
+            limit: int = Query(520, ge=60, le=config.MAX_KLINE), refresh: int = 0):
     if period not in datasource.KLT:
         raise HTTPException(status_code=400, detail=f"period 仅支持 {list(datasource.KLT)}")
     try:
@@ -292,7 +297,7 @@ def analyze(code: str, period: str = "day", adjust: int = 1, limit: int = Query(
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
-    bundle, degraded = _collect(code, period, adjust, limit)
+    bundle, degraded = _collect(code, period, adjust, limit, force=bool(refresh))
     if not bundle["quote"] and not bundle["rows"]:
         raise HTTPException(status_code=503, detail="；".join(degraded) or "数据源不可用")
     result = analysis.build(code, bundle["quote"].get("name"), bundle["quote"], bundle["rows"],
@@ -302,21 +307,21 @@ def analyze(code: str, period: str = "day", adjust: int = 1, limit: int = Query(
 
 
 @app.get("/api/stock/{code}/overview")
-def overview(code: str):
-    """首页一次性拿齐：行情 + 分析结论，减少移动端请求数。"""
+def overview(code: str, refresh: int = 0):
+    """首页一次性拿齐：行情 + 分析结论，减少移动端请求数。refresh=1 时行情/K线/同业立即回源。"""
     try:
         code = datasource.normalize_code(code)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
-    bundle, degraded = _collect(code, "day", 1, 750)
+    bundle, degraded = _collect(code, "day", 1, 750, force=bool(refresh))
     if not bundle["quote"] and not bundle["rows"]:
         raise HTTPException(status_code=503, detail="；".join(degraded) or "数据源不可用")
     result = analysis.build(code, bundle["quote"].get("name"), bundle["quote"], bundle["rows"],
                             bundle["financials"], bundle["valuation"], bundle["peers"])
     result["degraded"] = degraded
     return _ok({"quote": bundle["quote"], "analysis": result, "degraded": degraded,
-                "is_favorite": store.is_favorite(code)})
+                "is_favorite": store.is_favorite(code), "forced": bool(refresh)})
 
 
 # ---------------------------------------------------------------- 自选股
@@ -338,12 +343,12 @@ def _cached_analysis(code: str) -> dict | None:
 
 
 @app.get("/api/favorites")
-def list_favorites():
+def list_favorites(refresh: int = 0):
     items = []
     for fav in store.list_favorites():
         code = fav["code"]
         try:
-            quote = get_quote(code)
+            quote = get_quote(code, force=bool(refresh))
         except DataSourceError:
             quote = store.cache_get(f"quote:{code}", -1) or {}
         store.update_favorite_name(code, quote.get("name"))

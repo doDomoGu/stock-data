@@ -593,24 +593,32 @@
 
   /* ------------------------------------------------------------ 加载 */
 
-  function loadOverview(force) {
+  function loadOverview(force, quiet, hard) {
     if (state.data.overview && !force) { renderOverview(state.data.overview); return Promise.resolve(); }
-    return api('/api/stock/' + state.code + '/overview').then(function (data) {
+    var url = '/api/stock/' + state.code + '/overview' + (hard ? '?refresh=1' : '');
+    return api(url).then(function (data) {
       state.data.overview = data;
       state.loaded.overview = true;
+      state.lastRefresh = Date.now();
       renderOverview(data);
+      if (hard) toast('已强制刷新（行情/K线/同业已回源）');
       if (state.tab !== 'overview') loadTab(state.tab, force);
+    }).catch(function (err) {
+      // 自动刷新失败时不要把整页切成错误态，提示一下即可
+      if (!quiet) throw err;
+      toast('自动刷新失败：' + (err.message || '未知错误'));
     });
   }
 
-  function loadTrend(force) {
+  function loadTrend(force, hard) {
     if (state.data.kline && !force && state.data.kline._key === state.period + state.adjust + state.limit) {
       renderTrend(state.data.kline);
       return Promise.resolve();
     }
     // 多取一段用于均线预热，展示时再截取用户选的区间，保证 MA250 等长周期指标有效
     var fetchCount = Math.min(1500, state.limit + 260);
-    var url = '/api/stock/' + state.code + '/kline?period=' + state.period + '&adjust=' + state.adjust + '&limit=' + fetchCount;
+    var url = '/api/stock/' + state.code + '/kline?period=' + state.period + '&adjust=' + state.adjust +
+      '&limit=' + fetchCount + (hard ? '&refresh=1' : '');
     return api(url).then(function (data) {
       var rows = data.rows || [];
       var sliceAt = Math.max(0, rows.length - state.limit);
@@ -646,24 +654,24 @@
     });
   }
 
-  function loadPeers(force) {
+  function loadPeers(force, hard) {
     if (state.data.peers && !force) { renderPeers(state.data.peers); return Promise.resolve(); }
-    return api('/api/stock/' + state.code + '/peers').then(function (data) {
+    return api('/api/stock/' + state.code + '/peers' + (hard ? '?refresh=1' : '')).then(function (data) {
       state.data.peers = data;
       state.loaded.peers = true;
       renderPeers(data);
     });
   }
 
-  function loadTab(tab, force) {
+  function loadTab(tab, force, hard) {
     $('stateBlock').hidden = true;
     switchTab(tab, true);
-    if (tab === 'home') { loadHome(force); return; }
+    if (tab === 'home') { loadHome(force, false, hard); return; }
     var loader = { overview: loadOverview, trend: loadTrend, financial: loadFinancial, peers: loadPeers }[tab];
     if (!loader) return;
     var spinner = $('btnRefresh');
     spinner.classList.add('is-spinning');
-    loader(force).catch(function (err) {
+    loader(force, hard).catch(function (err) {
       if (err.unauthorized) {
         showState(err.message);
       } else {
@@ -735,14 +743,20 @@
 
   /* ------------------------------------------------------------ 首页：自选列表 */
 
-  function loadHome(force) {
+  function loadHome(force, quiet, hard) {
     if (state.home && !force) { renderHome(state.home); return Promise.resolve(); }
     var spinner = $('btnRefresh');
-    spinner.classList.add('is-spinning');
-    return api('/api/favorites').then(function (data) {
+    if (!quiet) spinner.classList.add('is-spinning');
+    return api('/api/favorites' + (hard ? '?refresh=1' : '')).then(function (data) {
       state.home = data;
+      state.lastRefresh = Date.now();
       renderHome(data);
+      if (hard) toast('已强制刷新');
     }).catch(function (err) {
+      if (quiet) {
+        toast('自动刷新失败：' + (err.message || '未知错误'));
+        return;
+      }
       if (err.unauthorized) {
         showState(err.message);
       } else {
@@ -766,7 +780,7 @@
     row.appendChild(el('div', 'home-summary__count', items.length + ' 只自选'));
     row.appendChild(el('div', 'home-summary__meta', items.length ? ('今日 ' + up + ' 涨 / ' + down + ' 跌') : '还没有自选股'));
     summary.appendChild(row);
-    summary.appendChild(el('div', 'home-summary__note', '点卡片看详情，右上角 × 移出自选'));
+    summary.appendChild(el('div', 'home-summary__note', '点卡片看详情，右上角 × 移出 · 盘中每 5 分钟自动刷新'));
 
     var list = $('favList');
     list.innerHTML = '';
@@ -847,6 +861,44 @@
       if (state.tab === 'home') loadHome(true);
     }).catch(function (err) {
       toast(err.message || '移出失败');
+    });
+  }
+
+  /* ------------------------------------------------------------ 自动刷新 */
+
+  // 只在 A 股交易时段、且页面可见时自动刷新。间隔 5 分钟：
+  // 行情服务端缓存是 60 秒，5 分钟足够看到变化，又不会给这台 1 核机器和数据源添压力。
+  var AUTO_REFRESH_MS = 5 * 60 * 1000;
+  var AUTO_CHECK_MS = 30 * 1000;
+
+  function isTradingTime() {
+    var now = new Date();
+    var bj = new Date(now.getTime() + (now.getTimezoneOffset() + 480) * 60000);  // 换算成北京时间
+    var day = bj.getDay();
+    if (day === 0 || day === 6) return false;
+    var minutes = bj.getHours() * 60 + bj.getMinutes();
+    return (minutes >= 570 && minutes <= 690) || (minutes >= 780 && minutes <= 900);  // 9:30-11:30, 13:00-15:00
+  }
+
+  function refreshCurrent(quiet, hard) {
+    if (state.tab === 'home') return loadHome(true, quiet, hard);
+    if (state.tab === 'overview') return loadOverview(true, quiet, hard);
+    // 走势/财务/同业的数据变化慢，重绘还会丢掉图表的缩放状态，自动刷新时交给手动
+    return Promise.resolve();
+  }
+
+  function autoRefreshCheck() {
+    if (document.hidden) return;
+    if (!isTradingTime()) return;
+    if (Date.now() - (state.lastRefresh || 0) < AUTO_REFRESH_MS) return;
+    refreshCurrent(true);
+  }
+
+  function startAutoRefresh() {
+    setInterval(autoRefreshCheck, AUTO_CHECK_MS);
+    // 从后台切回来时立刻补一次（若已超过间隔）
+    document.addEventListener('visibilitychange', function () {
+      if (!document.hidden) autoRefreshCheck();
     });
   }
 
@@ -974,9 +1026,10 @@
     bindSeg('segRange', function (value) { state.limit = parseInt(value, 10); loadTrend(true); });
 
     $('btnRefresh').addEventListener('click', function () {
-      if (state.tab === 'home') { loadHome(true); return; }
+      // 手动刷新一律强制回源，绕开服务端 60 秒的行情缓存
+      if (state.tab === 'home') { loadHome(true, false, true); return; }
       Object.keys(state.data).forEach(function (k) { state.data[k] = null; });
-      loadTab(state.tab, true);
+      loadTab(state.tab, true, true);
     });
     $('btnSearch').addEventListener('click', openSearch);
     $('btnSearchCancel').addEventListener('click', closeSearch);
