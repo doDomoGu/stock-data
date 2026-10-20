@@ -18,10 +18,17 @@
         <path d="M16.5 16.5 21 21" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
       </svg>
     </button>
+    <button class="topbar__back" id="btnBack" aria-label="返回自选" hidden>
+      <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true">
+        <path d="M15 5 8 12l7 7" fill="none" stroke="currentColor" stroke-width="2"
+              stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+    </button>
     <div class="topbar__title">
-      <span id="stockName">加载中…</span>
+      <span id="stockName">我的自选</span>
       <span class="topbar__code" id="stockCode"></span>
     </div>
+    <button class="topbar__refresh topbar__star" id="btnStar" aria-label="加入自选" hidden>☆</button>
     <button class="topbar__refresh" id="btnRefresh" aria-label="刷新数据">
       <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true">
         <path d="M20 11a8 8 0 1 0-2.3 5.7M20 5v6h-6" fill="none" stroke="currentColor" stroke-width="2"
@@ -31,16 +38,40 @@
   </header>
 
   <main id="main">
+    <!-- 首页：自选列表 -->
+    <section class="tab-panel" data-panel="home">
+      <div class="card home-summary" id="homeSummary">
+        <div class="skeleton skeleton--xl"></div>
+      </div>
+      <div class="fav-list" id="favList"></div>
+      <button class="btn btn--block" id="btnAddFavorite">＋ 添加自选股</button>
+      <p class="home-note">
+        推荐指数 = 位置与年线 30% + 估值 25% + 财务 25% + 动能 10% + 相对强度 10%。
+        它是按固定规则算出的<b>相对评分</b>，不是上涨概率，也不预测短期涨跌。
+      </p>
+    </section>
+
     <!-- 概览 -->
-    <section class="tab-panel" data-panel="overview">
+    <section class="tab-panel" data-panel="overview" hidden>
       <div class="card price-card" id="priceCard">
         <div class="skeleton skeleton--xl"></div>
       </div>
+      <div class="card hero-card" id="scoreCard"></div>
       <div class="card" id="keyMetrics"></div>
       <div class="card" id="valuationCard"></div>
-      <div class="card" id="scoreCard"></div>
       <div class="card" id="signalCard"></div>
       <div class="card" id="riskCard"></div>
+      <details class="card notice-card">
+        <summary>怎么看这些数字</summary>
+        <div class="howto" id="howtoBody">
+          <p><b>推荐指数</b>：把五个维度加权成一个 0~100 的相对分数。<b>高分只说明"按这套标准现在的条件较好"，不代表会涨多少、什么时候涨。</b></p>
+          <p><b>年线（MA250）</b>：过去 250 个交易日的平均成本，常被当作一年的"价值中枢"。价格低于年线说明多数持仓者浮亏；"乖离率"是现价偏离年线的百分比，负得越多说明离中枢越远。</p>
+          <p><b>分位</b>：把当前值放进这只股票自己的历史里排序。比如"年线乖离 0.2% 分位"意思是过去几年只有 0.2% 的时间比现在更便宜——这是相对它自己，不是和别的股票比。</p>
+          <p><b>PE / PB</b>：市盈率（股价 / 每股收益）与市净率（股价 / 每股净资产）。看绝对值意义有限，看历史分位更能说明贵不贵。</p>
+          <p><b>动能</b>：短期资金与趋势的状态（均线排列、MACD、RSI）。动能弱而估值低，往往是"便宜但还在跌"，需要耐心。</p>
+          <p><b>怎么用</b>：先用指数筛出候选，再点开看五维拆解和风险提示，最后结合公告与行业判断。指数只负责把注意力放到值得看的地方。</p>
+        </div>
+      </details>
       <details class="card notice-card">
         <summary>数据说明</summary>
         <ul id="noticeList"></ul>
@@ -108,7 +139,11 @@
   </main>
 
   <nav class="tabbar">
-    <button class="tabbar__item is-active" data-tab="overview">
+    <button class="tabbar__item is-active" data-tab="home">
+      <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M12 3 3 10h2v10h6v-6h2v6h6V10h2L12 3Z" fill="currentColor"/></svg>
+      <span>自选</span>
+    </button>
+    <button class="tabbar__item" data-tab="overview">
       <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M4 13h6V4H4v9Zm0 7h6v-5H4v5Zm10 0h6V11h-6v9Zm0-16v5h6V4h-6Z" fill="currentColor"/></svg>
       <span>概览</span>
     </button>
@@ -133,6 +168,7 @@
              autocomplete="off" enterkeyhint="search">
       <button class="search__cancel" id="btnSearchCancel">取消</button>
     </div>
+    <p class="search__hint" id="searchHint">输入后从结果里选择</p>
     <ul class="search__results" id="searchResults"></ul>
     <p class="search__hint">最近查看</p>
     <ul class="search__results" id="recentList"></ul>

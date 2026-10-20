@@ -19,6 +19,9 @@
 
 * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
 
+/* 组件上显式声明了 display 会盖掉 hidden 属性的默认样式，这里统一兜底 */
+[hidden] { display: none !important; }
+
 html, body {
   margin: 0;
   padding: 0;
@@ -337,3 +340,172 @@ tbody tr.is-self td { background: rgba(76, 141, 255, 0.1); font-weight: 600; }
 }
 
 .empty { color: var(--muted); font-size: 13px; padding: 12px 0; }
+
+/* ---------------------------------------------------------------- 首页：自选列表 */
+.home-summary { padding: 14px 14px 12px; }
+.home-summary__row { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
+.home-summary__count { font-size: 18px; font-weight: 700; }
+.home-summary__meta { font-size: 12px; color: var(--muted); }
+.home-summary__note { font-size: 11px; color: var(--muted); margin-top: 6px; }
+
+.fav-list { display: flex; flex-direction: column; gap: 8px; }
+
+.fav-card {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 10px;
+  padding: 13px 14px;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  cursor: pointer;
+}
+.fav-card:active { background: var(--card-2); }
+.fav-card__main { min-width: 0; }
+.fav-card__name {
+  font-size: 15px;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  padding-right: 14px;
+}
+.fav-card__code { font-size: 11px; font-weight: 400; color: var(--muted); margin-left: 6px; }
+.fav-card__meta {
+  font-size: 11px;
+  color: var(--muted);
+  margin-top: 3px;
+  line-height: 1.5;
+  /* 最多两行，避免长文本把卡片撑得过高 */
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.fav-card__right { text-align: right; }
+.fav-card__price { font-size: 16px; font-weight: 700; line-height: 1.2; }
+.fav-card__pct { font-size: 12px; font-weight: 600; margin-top: 2px; }
+
+.fav-score {
+  width: 52px;
+  height: 46px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  border-radius: 12px;
+  background: var(--card-2);
+  border: 1px solid var(--border);
+}
+.fav-score__num { font-size: 18px; font-weight: 700; line-height: 1; }
+.fav-score__label { font-size: 10px; color: var(--muted); margin-top: 2px; }
+.fav-score--good { border-color: rgba(240, 72, 62, 0.4); background: rgba(240, 72, 62, 0.1); }
+.fav-score--good .fav-score__num { color: var(--up); }
+.fav-score--bad { border-color: rgba(20, 184, 127, 0.35); background: rgba(20, 184, 127, 0.08); }
+.fav-score--bad .fav-score__num { color: var(--down); }
+
+.fav-card__remove {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  width: 26px;
+  height: 26px;
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  font-size: 16px;
+  line-height: 1;
+  border-radius: 8px;
+}
+.fav-card__remove:active { background: rgba(255, 255, 255, 0.08); }
+
+.home-empty {
+  padding: 26px 14px;
+  text-align: center;
+  color: var(--muted);
+  font-size: 13px;
+  background: var(--card);
+  border: 1px dashed var(--border);
+  border-radius: var(--radius);
+  margin: 0;
+}
+.home-note { font-size: 11px; color: var(--muted); line-height: 1.7; margin: 4px 2px 0; }
+.home-note b { color: #b9c6d6; font-weight: 600; }
+.btn--block { width: 100%; min-height: 46px; }
+
+/* ---------------------------------------------------------------- 推荐指数主卡 */
+.hero { display: flex; flex-direction: column; gap: 12px; }
+.hero__top { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+.hero__num {
+  font-size: 44px;
+  font-weight: 800;
+  line-height: 1;
+  letter-spacing: -1px;
+  margin-top: 4px;
+}
+.hero__num small { font-size: 13px; font-weight: 400; color: var(--muted); letter-spacing: 0; }
+.hero__num--good { color: var(--up); }
+.hero__num--bad { color: var(--down); }
+.hero__num--neutral { color: var(--text); }
+.hero__side { display: flex; flex-direction: column; align-items: flex-end; gap: 6px; }
+.hero__hint { font-size: 10.5px; color: var(--muted); }
+
+.hero__bar { height: 8px; border-radius: 999px; background: var(--card-2); overflow: hidden; }
+.hero__bar-fill { height: 100%; border-radius: 999px; background: var(--accent); transition: width 0.4s ease; }
+.hero__bar-fill--good { background: linear-gradient(90deg, #f0a83e, var(--up)); }
+.hero__bar-fill--bad { background: linear-gradient(90deg, var(--down), #3fbf8f); }
+.hero__bar-fill--neutral { background: linear-gradient(90deg, #6b7c90, var(--accent)); }
+
+.dim__label { font-size: 12px; }
+.dim--off { opacity: 0.45; }
+.hero__pos .metric-grid { margin-top: 4px; }
+
+.hero__drivers { display: flex; flex-wrap: wrap; gap: 6px; }
+.chip {
+  font-size: 11px;
+  padding: 3px 9px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--card-2);
+  color: var(--muted);
+}
+.chip--up { color: var(--up); border-color: rgba(240, 72, 62, 0.35); }
+.chip--down { color: var(--down); border-color: rgba(20, 184, 127, 0.35); }
+
+.hero__caution {
+  margin: 0;
+  padding: 8px 10px;
+  border-radius: 10px;
+  background: rgba(240, 168, 62, 0.1);
+  border: 1px solid rgba(240, 168, 62, 0.3);
+  color: #f0c684;
+  font-size: 11.5px;
+  line-height: 1.6;
+}
+
+.hero__method { border-top: 1px solid var(--border); padding-top: 10px; }
+.hero__method summary { font-size: 12px; color: var(--muted); }
+.hero__method p { margin: 8px 0 0; font-size: 11.5px; color: var(--muted); line-height: 1.7; }
+
+.howto p { margin: 0 0 10px; font-size: 12.5px; line-height: 1.75; color: #c6d2e0; }
+.howto p:last-child { margin-bottom: 0; }
+.howto b { color: var(--text); }
+
+/* ---------------------------------------------------------------- 搜索结果的加入按钮 */
+.r-actions { display: flex; align-items: center; gap: 8px; }
+.r-add {
+  min-width: 44px;
+  min-height: 32px;
+  border-radius: 9px;
+  border: 1px solid var(--border);
+  background: var(--card-2);
+  color: var(--accent);
+  font-size: 14px;
+  padding: 0 8px;
+}
+.r-add.is-added { color: var(--muted); font-size: 11px; }
+
+.topbar__star { font-size: 20px; line-height: 1; color: var(--muted); }
+.topbar__star.is-on { color: #f0c040; }

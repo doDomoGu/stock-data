@@ -50,6 +50,11 @@ CREATE TABLE IF NOT EXISTS valuation (
 );
 CREATE INDEX IF NOT EXISTS idx_kline_code ON kline (code, klt, fqt, trade_date DESC);
 CREATE INDEX IF NOT EXISTS idx_valuation_code ON valuation (code, trade_date DESC);
+CREATE TABLE IF NOT EXISTS favorites (
+    code TEXT PRIMARY KEY,
+    name TEXT,
+    created_at REAL NOT NULL
+);
 """
 
 
@@ -243,4 +248,46 @@ def stats() -> dict:
             "financial_rows": c.execute("SELECT COUNT(*) AS n FROM financials").fetchone()["n"],
             "valuation_rows": c.execute("SELECT COUNT(*) AS n FROM valuation").fetchone()["n"],
             "cache_keys": c.execute("SELECT COUNT(*) AS n FROM kv_cache").fetchone()["n"],
+            "favorites": c.execute("SELECT COUNT(*) AS n FROM favorites").fetchone()["n"],
         }
+
+
+# ---------------------------------------------------------------- 自选股（单用户共用）
+
+def list_favorites() -> list[dict]:
+    with conn() as c:
+        rows = c.execute(
+            "SELECT code, name, created_at FROM favorites ORDER BY created_at ASC"
+        ).fetchall()
+    return [dict(r) for r in rows]
+
+
+def add_favorite(code: str, name: str | None) -> None:
+    with conn() as c:
+        c.execute(
+            "INSERT INTO favorites (code, name, created_at) VALUES (?, ?, ?) "
+            "ON CONFLICT(code) DO UPDATE SET name = COALESCE(excluded.name, favorites.name)",
+            (code, name, time.time()),
+        )
+        c.commit()
+
+
+def is_favorite(code: str) -> bool:
+    with conn() as c:
+        row = c.execute("SELECT 1 FROM favorites WHERE code = ?", (code,)).fetchone()
+    return row is not None
+
+
+def remove_favorite(code: str) -> bool:
+    with conn() as c:
+        cur = c.execute("DELETE FROM favorites WHERE code = ?", (code,))
+        c.commit()
+        return cur.rowcount > 0
+
+
+def update_favorite_name(code: str, name: str | None) -> None:
+    if not name:
+        return
+    with conn() as c:
+        c.execute("UPDATE favorites SET name = ? WHERE code = ? AND (name IS NULL OR name = '')", (name, code))
+        c.commit()

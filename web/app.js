@@ -7,10 +7,13 @@
   var state = {
     code: '',
     token: '',
-    tab: 'overview',
+    tab: 'home',
     period: 'day',
     adjust: 1,
     limit: 250,
+    isFav: false,
+    home: null,
+    favCodes: [],
     loaded: { overview: false, trend: false, financial: false, peers: false },
     data: { overview: null, kline: null, financial: null, peers: null },
     charts: {}
@@ -83,10 +86,15 @@
   // 接口地址按当前目录拼相对路径，避免写死绝对路径导致子目录下 404。
   var BASE_PATH = location.pathname.replace(/[^/]*$/, '');
 
-  function api(path) {
+  function api(path, method, body) {
     var url = BASE_PATH + String(path).replace(/^\//, '');
     if (state.token) url += (url.indexOf('?') >= 0 ? '&' : '?') + 'token=' + encodeURIComponent(state.token);
-    return fetch(url, { headers: { Accept: 'application/json' } }).then(function (res) {
+    var options = { method: method || 'GET', headers: { Accept: 'application/json' } };
+    if (body) {
+      options.headers['Content-Type'] = 'application/json';
+      options.body = JSON.stringify(body);
+    }
+    return fetch(url, options).then(function (res) {
       return res.json().catch(function () { return {}; }).then(function (body) {
         if (res.status === 401) {
           var err = new Error('需要访问口令：请在网址后加 ?token=你的口令');
@@ -197,36 +205,89 @@
       valCard.appendChild(el('p', 'empty', '估值数据不可用：' + (val.reason || '未知原因')));
     }
 
-    // 评分卡
+    // 推荐指数（概览页主卡）
     var scoreCard = $('scoreCard');
     scoreCard.innerHTML = '';
-    var head = el('div', 'score-head');
-    var scoreBox = el('div');
-    scoreBox.appendChild(el('div', 'metric__label', '规则化综合评分'));
-    scoreBox.innerHTML += '<div class="score-value">' + num(a.total_score, 1) + '<small> / ' + (a.max_score || 100) + '</small></div>';
-    head.appendChild(scoreBox);
-    head.appendChild(el('span', 'badge badge--' + (a.rating_level || 'neutral'), a.rating || '—'));
-    scoreCard.appendChild(head);
+    var rec = a.recommendation || {};
+    var pos = a.position || {};
+    var hero = el('div', 'hero');
 
-    var dims = a.dimensions || {};
-    var names = { trend: '技术面', valuation: '估值', financial: '财务', peer: '同业' };
+    var top = el('div', 'hero__top');
+    var numBox = el('div', 'hero__num-box');
+    numBox.appendChild(el('div', 'metric__label', '推荐指数'));
+    var numHtml = '<div class="hero__num' + (rec.rating_level ? ' hero__num--' + rec.rating_level : '') + '">' +
+      (rec.index === null || rec.index === undefined ? '—' : num(rec.index, 0)) + '<small> / 100</small></div>';
+    numBox.innerHTML += numHtml;
+    top.appendChild(numBox);
+    var sideBox = el('div', 'hero__side');
+    sideBox.appendChild(el('span', 'badge badge--' + (rec.rating_level || 'neutral'), rec.rating || '—'));
+    sideBox.appendChild(el('div', 'hero__hint', '规则评分，不是上涨概率'));
+    top.appendChild(sideBox);
+    hero.appendChild(top);
+
+    if (rec.index !== null && rec.index !== undefined) {
+      var heroBar = el('div', 'hero__bar');
+      var heroFill = el('div', 'hero__bar-fill' + (rec.rating_level ? ' hero__bar-fill--' + rec.rating_level : ''));
+      heroFill.style.width = Math.max(2, Math.min(100, rec.index)) + '%';
+      heroBar.appendChild(heroFill);
+      hero.appendChild(heroBar);
+    }
+
     var dimList = el('div', 'dim-list');
-    Object.keys(names).forEach(function (key) {
-      var d = dims[key] || {};
-      var score = d.score === null || d.score === undefined ? null : Number(d.score);
-      var max = d.max || 0;
-      var ratio = score === null || !max ? 0 : Math.max(0, Math.min(1, score / max));
-      var row = el('div', 'dim');
-      row.appendChild(el('span', null, names[key]));
-      var bar = el('div', 'dim__bar');
-      var fill = el('div', 'dim__fill' + (ratio >= 0.65 ? ' dim__fill--good' : ratio < 0.4 ? ' dim__fill--bad' : ''));
-      fill.style.width = (ratio * 100).toFixed(0) + '%';
-      bar.appendChild(fill);
-      row.appendChild(bar);
-      row.appendChild(el('span', 'dim__val', score === null ? '无数据' : num(score, 1) + '/' + max));
+    (rec.breakdown || []).forEach(function (d) {
+      var row = el('div', 'dim' + (d.available ? '' : ' dim--off'));
+      row.appendChild(el('span', 'dim__label', d.label));
+      var track = el('div', 'dim__bar');
+      var fillBar = el('div', 'dim__fill' + (d.available && d.score >= 65 ? ' dim__fill--good'
+        : d.available && d.score < 40 ? ' dim__fill--bad' : ''));
+      fillBar.style.width = (d.available ? Math.max(2, Math.min(100, d.score)) : 0) + '%';
+      track.appendChild(fillBar);
+      row.appendChild(track);
+      row.appendChild(el('span', 'dim__val', d.available ? num(d.score, 0) : '无数据'));
+      row.title = (d.detail || '') + '（基础权重 ' + d.base_weight + '%）';
       dimList.appendChild(row);
     });
-    scoreCard.appendChild(dimList);
+    hero.appendChild(dimList);
+
+    if (pos.available) {
+      var posBox = el('div', 'hero__pos');
+      posBox.appendChild(el('div', 'section-title', '年线位置'));
+      var posGrid = el('div', 'metric-grid');
+      posGrid.appendChild(metric('年线(MA250)', num(pos.ma250)));
+      posGrid.appendChild(metric('乖离率', signed(pos.bias, 1, '%')));
+      posGrid.appendChild(metric('乖离分位', num(pos.bias_percentile, 0) + '%'));
+      posGrid.appendChild(metric('年线趋势', pos.slope_trend || '—'));
+      posGrid.appendChild(metric('20 日斜率', signed(pos.slope, 2, '%')));
+      posGrid.appendChild(metric('一年区间分位', num(pos.range_position && pos.range_position.pct, 0) + '%'));
+      posBox.appendChild(posGrid);
+      hero.appendChild(posBox);
+    }
+
+    var drivers = rec.drivers || {};
+    if ((drivers.positive || []).length || (drivers.negative || []).length) {
+      var drv = el('div', 'hero__drivers');
+      (drivers.positive || []).forEach(function (d) {
+        drv.appendChild(el('span', 'chip chip--up', '↑ ' + d.label + ' ' + num(d.score, 0)));
+      });
+      (drivers.negative || []).forEach(function (d) {
+        drv.appendChild(el('span', 'chip chip--down', '↓ ' + d.label + ' ' + num(d.score, 0)));
+      });
+      hero.appendChild(drv);
+    }
+    (rec.cautions || []).forEach(function (text) {
+      hero.appendChild(el('p', 'hero__caution', '注意：' + text));
+    });
+    if (rec.method) {
+      var methodBox = el('details', 'hero__method');
+      methodBox.appendChild(el('summary', null, '这个分数怎么来的'));
+      methodBox.appendChild(el('p', null, rec.method + '。'));
+      if (rec.disclaimer) methodBox.appendChild(el('p', null, rec.disclaimer));
+      hero.appendChild(methodBox);
+    }
+    scoreCard.appendChild(hero);
+
+    state.isFav = !!payload.is_favorite;
+    updateStar();
 
     // 信号卡
     var signalCard = $('signalCard');
@@ -597,6 +658,7 @@
   function loadTab(tab, force) {
     $('stateBlock').hidden = true;
     switchTab(tab, true);
+    if (tab === 'home') { loadHome(force); return; }
     var loader = { overview: loadOverview, trend: loadTrend, financial: loadFinancial, peers: loadPeers }[tab];
     if (!loader) return;
     var spinner = $('btnRefresh');
@@ -616,26 +678,176 @@
 
   function switchTab(tab, silent) {
     state.tab = tab;
+    var isHome = tab === 'home';
     Array.prototype.forEach.call(document.querySelectorAll('.tab-panel'), function (p) {
       p.hidden = p.getAttribute('data-panel') !== tab;
     });
     Array.prototype.forEach.call(document.querySelectorAll('.tabbar__item'), function (b) {
       b.classList.toggle('is-active', b.getAttribute('data-tab') === tab);
     });
+    // 顶栏随视图切换：首页是"我的自选"，个股页显示股票与收藏按钮
+    $('btnSearch').hidden = !isHome;
+    $('btnBack').hidden = isHome;
+    $('btnStar').hidden = isHome;
+    if (isHome) {
+      $('stockName').textContent = '我的自选';
+      $('stockCode').textContent = state.home && state.home.count ? state.home.count + ' 只' : '';
+    }
     if (!silent) window.scrollTo({ top: 0, behavior: 'smooth' });
     requestAnimationFrame(resizeCharts);
   }
 
-  function selectStock(code, name) {
+  function enterHome() {
+    switchTab('home');
+    loadHome(false);
+  }
+
+  function showHome(push) {
+    enterHome();
+    if (push) history.pushState({ home: true }, '', state.token ? '?token=' + encodeURIComponent(state.token) : '?');
+  }
+
+  function enterStock(code, name) {
     state.code = code;
     state.data = { overview: null, kline: null, financial: null, peers: null };
+    state.isFav = false;
     localStorage.setItem(STORAGE.code, code);
     rememberRecent(code, name);
-    history.replaceState(null, '', '?code=' + code + (state.token ? '&token=' + encodeURIComponent(state.token) : ''));
     $('stockName').textContent = name || '加载中…';
     $('stockCode').textContent = code;
-    closeSearch();
     loadTab('overview', true);
+  }
+
+  function openStock(code, name) {
+    enterStock(code, name);
+    var qs = '?code=' + code + (state.token ? '&token=' + encodeURIComponent(state.token) : '');
+    history.pushState({ code: code }, '', qs);
+    closeSearch();
+  }
+
+  function updateStar() {
+    var btn = $('btnStar');
+    if (!btn) return;
+    btn.textContent = state.isFav ? '★' : '☆';
+    btn.classList.toggle('is-on', !!state.isFav);
+    btn.setAttribute('aria-label', state.isFav ? '移出自选' : '加入自选');
+  }
+
+  /* ------------------------------------------------------------ 首页：自选列表 */
+
+  function loadHome(force) {
+    if (state.home && !force) { renderHome(state.home); return Promise.resolve(); }
+    var spinner = $('btnRefresh');
+    spinner.classList.add('is-spinning');
+    return api('/api/favorites').then(function (data) {
+      state.home = data;
+      renderHome(data);
+    }).catch(function (err) {
+      if (err.unauthorized) {
+        showState(err.message);
+      } else {
+        toast(err.message || '自选加载失败');
+        showState('自选列表加载失败：' + (err.message || '未知错误'), function () { loadHome(true); });
+      }
+    }).then(function () {
+      spinner.classList.remove('is-spinning');
+    });
+  }
+
+  function renderHome(payload) {
+    var items = payload.items || [];
+    state.favCodes = items.map(function (i) { return i.code; });
+
+    var summary = $('homeSummary');
+    summary.innerHTML = '';
+    var up = items.filter(function (i) { return (i.pct_chg || 0) > 0; }).length;
+    var down = items.filter(function (i) { return (i.pct_chg || 0) < 0; }).length;
+    var row = el('div', 'home-summary__row');
+    row.appendChild(el('div', 'home-summary__count', items.length + ' 只自选'));
+    row.appendChild(el('div', 'home-summary__meta', items.length ? ('今日 ' + up + ' 涨 / ' + down + ' 跌') : '还没有自选股'));
+    summary.appendChild(row);
+    summary.appendChild(el('div', 'home-summary__note', '点卡片看详情，右上角 × 移出自选'));
+
+    var list = $('favList');
+    list.innerHTML = '';
+    if (!items.length) {
+      list.appendChild(el('p', 'home-empty', '先添加几只关注的股票，首页会显示它们的价格和推荐指数。'));
+      return;
+    }
+    items.forEach(function (item) { list.appendChild(favCard(item)); });
+  }
+
+  function favCard(item) {
+    var card = el('div', 'fav-card');
+    card.setAttribute('data-code', item.code);
+    card.addEventListener('click', function (event) {
+      if (event.target.closest('.fav-card__remove')) return;
+      openStock(item.code, item.name);
+    });
+
+    var main = el('div', 'fav-card__main');
+    var nameRow = el('div', 'fav-card__name');
+    nameRow.appendChild(document.createTextNode(item.name || item.code));
+    nameRow.appendChild(el('span', 'fav-card__code', item.code));
+    main.appendChild(nameRow);
+    var meta = [];
+    if (item.pe_dynamic !== null && item.pe_dynamic !== undefined) meta.push('PE ' + num(item.pe_dynamic));
+    if (item.pb !== null && item.pb !== undefined) meta.push('PB ' + num(item.pb));
+    if (item.bias !== null && item.bias !== undefined) {
+      meta.push('年线 ' + signed(item.bias, 1, '%'));
+    }
+    main.appendChild(el('div', 'fav-card__meta', meta.length ? meta.join(' · ') : '数据待更新'));
+    card.appendChild(main);
+
+    var right = el('div', 'fav-card__right');
+    right.appendChild(el('div', 'fav-card__price ' + trendClass(item.pct_chg), num(item.price)));
+    right.appendChild(el('div', 'fav-card__pct ' + trendClass(item.pct_chg), signed(item.pct_chg, 2, '%')));
+    card.appendChild(right);
+
+    var score = el('div', 'fav-score' + (item.rating_level ? ' fav-score--' + item.rating_level : ''));
+    if (item.index === null || item.index === undefined) {
+      score.appendChild(el('span', 'fav-score__num', '—'));
+      score.appendChild(el('span', 'fav-score__label', '待更新'));
+    } else {
+      score.appendChild(el('span', 'fav-score__num', num(item.index, 0)));
+      score.appendChild(el('span', 'fav-score__label', item.rating || ''));
+    }
+    card.appendChild(score);
+
+    var rm = el('button', 'fav-card__remove', '×');
+    rm.setAttribute('aria-label', '移出自选');
+    rm.addEventListener('click', function (event) {
+      event.stopPropagation();
+      removeFavorite(item);
+    });
+    card.appendChild(rm);
+    return card;
+  }
+
+  function addFavorite(code, name) {
+    return api('/api/favorites', 'POST', { code: code }).then(function (data) {
+      toast('已加入自选：' + (data.name || name || code));
+      if (state.code === code) { state.isFav = true; updateStar(); }
+      state.home = null;
+      if (state.tab === 'home') loadHome(true);
+      return data;
+    }).catch(function (err) {
+      toast(err.message || '加入失败');
+      throw err;
+    });
+  }
+
+  function removeFavorite(item) {
+    var label = item.name || item.code;
+    if (!window.confirm('把 ' + label + ' 移出自选？')) return;
+    api('/api/favorites/' + item.code, 'DELETE').then(function () {
+      toast('已移出 ' + label);
+      state.home = null;
+      if (state.code === item.code) { state.isFav = false; updateStar(); }
+      if (state.tab === 'home') loadHome(true);
+    }).catch(function (err) {
+      toast(err.message || '移出失败');
+    });
   }
 
   /* ------------------------------------------------------------ 搜索与最近查看 */
@@ -659,9 +871,34 @@
       left.innerHTML = '<span class="r-name">' + escapeHtml(item.name) + '</span><span class="r-code">' + escapeHtml(item.code) + '</span>';
       li.appendChild(left);
       li.appendChild(el('span', 'r-market', '查看'));
-      li.addEventListener('click', function () { selectStock(item.code, item.name); });
+      li.addEventListener('click', function () { openStock(item.code, item.name); });
       node.appendChild(li);
     });
+  }
+
+  function searchRow(item) {
+    var li = el('li');
+    var left = el('div');
+    left.innerHTML = '<span class="r-name">' + escapeHtml(item.name) + '</span><span class="r-code">' + escapeHtml(item.code) + '</span>';
+    li.appendChild(left);
+
+    var actions = el('div', 'r-actions');
+    var isFav = state.favCodes.indexOf(item.code) >= 0;
+    var addBtn = el('button', 'r-add' + (isFav ? ' is-added' : ''), isFav ? '已加' : '＋');
+    addBtn.setAttribute('aria-label', '加入自选');
+    addBtn.addEventListener('click', function (event) {
+      event.stopPropagation();
+      if (isFav) { toast('已在自选里'); return; }
+      addFavorite(item.code, item.name).then(function () { renderRecents(); });
+      addBtn.textContent = '已加';
+      addBtn.classList.add('is-added');
+    });
+    actions.appendChild(addBtn);
+    actions.appendChild(el('span', 'r-market', item.market || ''));
+    li.appendChild(actions);
+
+    li.addEventListener('click', function () { openStock(item.code, item.name); });
+    return li;
   }
 
   function openSearch() {
@@ -682,15 +919,7 @@
     api('/api/search?q=' + encodeURIComponent(keyword) + '&count=8').then(function (list) {
       node.innerHTML = '';
       if (!list.length) { node.appendChild(el('li', null, '未找到匹配的股票')); return; }
-      list.forEach(function (item) {
-        var li = el('li');
-        var left = el('div');
-        left.innerHTML = '<span class="r-name">' + escapeHtml(item.name) + '</span><span class="r-code">' + escapeHtml(item.code) + '</span>';
-        li.appendChild(left);
-        li.appendChild(el('span', 'r-market', item.market || ''));
-        li.addEventListener('click', function () { selectStock(item.code, item.name); });
-        node.appendChild(li);
-      });
+      list.forEach(function (item) { node.appendChild(searchRow(item)); });
     }).catch(function (err) { toast(err.message || '搜索失败'); });
   }
 
@@ -716,16 +945,28 @@
     });
   }
 
+  function routeFromUrl() {
+    var params = new URLSearchParams(location.search);
+    var code = params.get('code');
+    if (code) { enterStock(code, null); }
+    else { enterHome(); }
+  }
+
   function init() {
     var params = new URLSearchParams(location.search);
     state.token = params.get('token') || localStorage.getItem(STORAGE.token) || '';
     if (state.token) localStorage.setItem(STORAGE.token, state.token);
-    state.code = params.get('code') || localStorage.getItem(STORAGE.code) || '601021';
-    $('stockCode').textContent = state.code;
-    history.replaceState(null, '', '?code=' + state.code + (state.token ? '&token=' + encodeURIComponent(state.token) : ''));
 
     Array.prototype.forEach.call(document.querySelectorAll('.tabbar__item'), function (btn) {
-      btn.addEventListener('click', function () { loadTab(btn.getAttribute('data-tab')); });
+      btn.addEventListener('click', function () {
+        var tab = btn.getAttribute('data-tab');
+        if (tab === 'home') {
+          showHome(true);
+        } else {
+          if (!state.code) state.code = localStorage.getItem(STORAGE.code) || '601021';
+          loadTab(tab);
+        }
+      });
     });
 
     bindSeg('segPeriod', function (value) { state.period = value; loadTrend(true); });
@@ -733,11 +974,25 @@
     bindSeg('segRange', function (value) { state.limit = parseInt(value, 10); loadTrend(true); });
 
     $('btnRefresh').addEventListener('click', function () {
+      if (state.tab === 'home') { loadHome(true); return; }
       Object.keys(state.data).forEach(function (k) { state.data[k] = null; });
       loadTab(state.tab, true);
     });
     $('btnSearch').addEventListener('click', openSearch);
     $('btnSearchCancel').addEventListener('click', closeSearch);
+    $('btnBack').addEventListener('click', function () { showHome(true); });
+    $('btnAddFavorite').addEventListener('click', function () {
+      $('searchHint').textContent = '点结果右侧的 ＋ 加入自选，点名称直接查看';
+      openSearch();
+    });
+    $('btnStar').addEventListener('click', function () {
+      if (!state.code) return;
+      if (state.isFav) {
+        removeFavorite({ code: state.code, name: $('stockName').textContent });
+      } else {
+        addFavorite(state.code);
+      }
+    });
 
     var timer = null;
     $('searchInput').addEventListener('input', function (event) {
@@ -749,16 +1004,20 @@
       if (event.key === 'Enter') {
         clearTimeout(timer);
         var value = event.target.value.trim();
-        if (/^\d{6}$/.test(value)) selectStock(value, null); else doSearch(value);
+        if (/^\d{6}$/.test(value)) openStock(value, null); else doSearch(value);
       }
     });
 
     window.addEventListener('resize', resizeCharts);
     window.addEventListener('orientationchange', function () { setTimeout(resizeCharts, 250); });
     document.addEventListener('visibilitychange', function () { if (!document.hidden) resizeCharts(); });
+    window.addEventListener('popstate', routeFromUrl);
 
-    switchTab('overview', true);
-    loadTab('overview', true);
+    if (params.get('code')) {
+      enterStock(params.get('code'), null);
+    } else {
+      enterHome();
+    }
   }
 
   if (document.readyState === 'loading') {

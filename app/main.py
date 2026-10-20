@@ -4,10 +4,11 @@ from __future__ import annotations
 import time
 from datetime import datetime, timedelta, timezone
 
-from fastapi import FastAPI, HTTPException, Query, Request
+from fastapi import BackgroundTasks, FastAPI, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
+from pydantic import BaseModel
 
 from . import analysis, config, datasource, indicators, store
 from .datasource import DataSourceError
@@ -15,7 +16,7 @@ from .datasource import DataSourceError
 CN_TZ = timezone(timedelta(hours=8))
 
 app = FastAPI(title="股票分析看板", docs_url="/api/docs", openapi_url="/api/openapi.json")
-app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["GET"], allow_headers=["*"])
+app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["GET", "POST", "DELETE"], allow_headers=["*"])
 
 
 @app.on_event("startup")
@@ -308,13 +309,104 @@ def overview(code: str):
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
-    bundle, degraded = _collect(code, "day", 1, 300)
+    bundle, degraded = _collect(code, "day", 1, 750)
     if not bundle["quote"] and not bundle["rows"]:
         raise HTTPException(status_code=503, detail="；".join(degraded) or "数据源不可用")
     result = analysis.build(code, bundle["quote"].get("name"), bundle["quote"], bundle["rows"],
                             bundle["financials"], bundle["valuation"], bundle["peers"])
     result["degraded"] = degraded
-    return _ok({"quote": bundle["quote"], "analysis": result, "degraded": degraded})
+    return _ok({"quote": bundle["quote"], "analysis": result, "degraded": degraded,
+                "is_favorite": store.is_favorite(code)})
+
+
+# ---------------------------------------------------------------- 自选股
+
+class FavoriteIn(BaseModel):
+    code: str
+
+
+def _cached_analysis(code: str) -> dict | None:
+    """只读本地缓存算推荐指数：首页列表不能为 N 只股票各打一遍上游接口。"""
+    rows = store.load_kline(code, 101, 1, 750)
+    if len(rows) < 300:
+        return None
+    quote = store.cache_get(f"quote:{code}", -1) or {}
+    fin = store.load_financials(code, 8)
+    valuation = store.load_valuation(code)
+    peers = store.cache_get(f"peers:{code}", -1) or {"board": None, "members": [], "industry": None}
+    return analysis.build(code, quote.get("name"), quote, rows, fin, valuation, peers)
+
+
+@app.get("/api/favorites")
+def list_favorites():
+    items = []
+    for fav in store.list_favorites():
+        code = fav["code"]
+        try:
+            quote = get_quote(code)
+        except DataSourceError:
+            quote = store.cache_get(f"quote:{code}", -1) or {}
+        store.update_favorite_name(code, quote.get("name"))
+        cached = _cached_analysis(code)
+        rec = (cached or {}).get("recommendation") or {}
+        position = (cached or {}).get("position") or {}
+        items.append({
+            "code": code,
+            "name": quote.get("name") or fav.get("name"),
+            "price": quote.get("price"),
+            "change": quote.get("change"),
+            "pct_chg": quote.get("pct_chg"),
+            "pe_dynamic": quote.get("pe_dynamic"),
+            "pb": quote.get("pb"),
+            "market_cap": quote.get("market_cap"),
+            "index": rec.get("index"),
+            "rating": rec.get("rating"),
+            "rating_level": rec.get("rating_level"),
+            "bias": position.get("bias"),
+            "bias_percentile": position.get("bias_percentile"),
+            "quote_source": quote.get("source"),
+            "scored": bool(cached),
+        })
+    return _ok({"items": items, "count": len(items)})
+
+
+def _warm_stock(code: str) -> None:
+    """加自选后后台补齐数据，让列表里的推荐指数在下次打开时就能显示。"""
+    try:
+        get_kline(code, 101, 1, 750)
+        get_financials(code, 8)
+        get_valuation(code)
+        get_peers(code)
+    except DataSourceError:
+        pass
+
+
+@app.post("/api/favorites")
+def add_favorite(payload: FavoriteIn, background: BackgroundTasks):
+    try:
+        code = datasource.normalize_code(payload.code)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    name = None
+    try:
+        name = datasource.fetch_quote(code).get("name")
+    except DataSourceError:
+        name = store.cache_get(f"quote:{code}", -1) or None
+        name = name.get("name") if isinstance(name, dict) else None
+    store.add_favorite(code, name)
+    background.add_task(_warm_stock, code)
+    return _ok({"code": code, "name": name})
+
+
+@app.delete("/api/favorites/{code}")
+def delete_favorite(code: str):
+    try:
+        code = datasource.normalize_code(code)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    if not store.remove_favorite(code):
+        raise HTTPException(status_code=404, detail="该股票不在自选列表中")
+    return _ok({"code": code, "removed": True})
 
 
 app.mount("/", StaticFiles(directory=str(config.WEB_DIR), html=True), name="web")

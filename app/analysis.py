@@ -298,23 +298,200 @@ def peer_module(peers: dict, self_quote: dict) -> dict:
     }
 
 
-def rating_of(total: float) -> tuple[str, str]:
-    if total >= 80:
-        return "强", "good"
-    if total >= 65:
-        return "偏强", "good"
-    if total >= 45:
-        return "中性", "neutral"
-    if total >= 30:
-        return "偏弱", "bad"
-    return "弱", "bad"
-
-
 def _fmt(value, unit: str = "", digits: int = 1, signed: bool = False) -> str:
     if value is None:
         return "—"
     fmt = f"{{:{'+' if signed else ''}.{digits}f}}{unit}"
     return fmt.format(value)
+
+
+# ---------------------------------------------------------------- 推荐指数
+
+def position_module(kline: list[dict]) -> dict:
+    """价格相对年线的位置：乖离率与年线斜率都放进该股自身的历史分布里取分位。
+
+    用分位而不是固定阈值，是因为不同股票、不同行业的年线乖离波动幅度差别很大；
+    分位回答的是"这只股票现在相对它自己历史上的位置贵不贵、趋势好不好"。
+    """
+    closes = [r["close"] for r in kline]
+    if len(closes) < 300:
+        return {"available": False, "reason": "日线不足 300 个交易日，无法计算年线相关指标"}
+
+    ma250 = ind.sma(closes, 250)
+    bias = [None if ma is None else round((c / ma - 1) * 100, 2) for c, ma in zip(closes, ma250)]
+    valid_bias = [b for b in bias if b is not None]
+    current_bias = bias[-1]
+    bias_pct = ind.percentile_of(valid_bias, current_bias)
+
+    slopes: list[float] = []
+    for i in range(19, len(ma250)):
+        earlier, later = ma250[i - 19], ma250[i]
+        if earlier and later:
+            slopes.append(round((later / earlier - 1) * 100, 2))
+    current_slope = slopes[-1] if slopes else None
+    slope_pct = ind.percentile_of(slopes, current_slope)
+
+    pos = ind.range_position(closes, 250)
+
+    if bias_pct is None:
+        return {"available": False, "reason": "年线数据不足"}
+
+    bias_score = 100 - bias_pct          # 乖离越低（越接近或低于年线）得分越高：均值回归视角
+    slope_score = slope_pct if slope_pct is not None else 50   # 年线向上得分高：趋势视角
+    range_score = 100 - (pos["pct"] if pos["pct"] is not None else 50)
+    score = 0.55 * bias_score + 0.30 * slope_score + 0.15 * range_score
+
+    trend_word = "上行" if (current_slope or 0) > 0.3 else "下行" if (current_slope or 0) < -0.3 else "走平"
+    details = [
+        f"现价 {closes[-1]:.2f}，年线(MA250) {ma250[-1]:.2f}，乖离 {current_bias:+.1f}%，处于该股近 {len(valid_bias)} 个交易日的 {bias_pct:.0f}% 分位",
+        f"年线 20 日变化 {_fmt(current_slope, '%', 2, True)}，年线{trend_word}",
+        f"近一年价格区间 {pos['low']} ~ {pos['high']}，现价位于 {pos['pct']}% 分位",
+    ]
+    return {
+        "available": True,
+        "score": round(score, 1),
+        "bias": current_bias,
+        "bias_percentile": bias_pct,
+        "ma250": round(ma250[-1], 2),
+        "slope": current_slope,
+        "slope_percentile": slope_pct,
+        "slope_trend": trend_word,
+        "range_position": pos,
+        "bias_score": round(bias_score, 1),
+        "slope_score": round(slope_score, 1),
+        "range_score": round(range_score, 1),
+        "details": details,
+    }
+
+
+def momentum_module(trend: dict) -> dict:
+    """短线动能：均线排列 + MACD + RSI，只占较小权重。”"""
+    if not trend.get("available"):
+        return {"available": False, "score": None}
+    parts = []
+    alignment = trend.get("alignment") or ""
+    if "多头" in alignment:
+        parts.append(("均线排列", 100))
+    elif "空头" in alignment:
+        parts.append(("均线排列", 20))
+    else:
+        parts.append(("均线排列", 55))
+
+    macd = trend.get("macd") or {}
+    dif, dea, hist = macd.get("dif"), macd.get("dea"), macd.get("hist")
+    if dif is not None and dea is not None:
+        if dif > dea and (hist or 0) > 0:
+            parts.append(("MACD", 90))
+        elif dif > dea:
+            parts.append(("MACD", 65))
+        else:
+            parts.append(("MACD", 25))
+
+    rsi = trend.get("rsi14")
+    if rsi is not None:
+        if rsi > 75:
+            parts.append(("RSI", 25))
+        elif rsi > 65:
+            parts.append(("RSI", 55))
+        elif rsi >= 45:
+            parts.append(("RSI", 70))
+        elif rsi >= 30:
+            parts.append(("RSI", 55))
+        else:
+            parts.append(("RSI", 70))
+
+    score = sum(v for _, v in parts) / len(parts) if parts else None
+    return {
+        "available": score is not None,
+        "score": round(score, 1) if score is not None else None,
+        "details": [f"{name} {value:.0f} 分" for name, value in parts],
+    }
+
+
+def recommendation_module(position: dict, valuation: dict, financial: dict,
+                          trend: dict, peer: dict) -> dict:
+    """把五个维度加权成 0~100 的推荐指数。
+
+    缺数据的维度不按 0 分算，而是从总权重里剔除后重新归一化，
+    避免"没取到财报"被误判成"财务很差"。
+    """
+    def scaled(module: dict, max_score: float) -> float | None:
+        score = module.get("score")
+        if score is None:
+            return None
+        return round(score / max_score * 100, 1)
+
+    dims = [
+        ("position", "位置与年线", 0.30, position.get("score") if position.get("available") else None,
+         "价格相对年线的乖离、年线斜率与一年区间位置"),
+        ("valuation", "估值", 0.25, scaled(valuation, 25) if valuation.get("available") else None,
+         "PE/PB 在该股自身历史中的分位"),
+        ("financial", "财务", 0.25, scaled(financial, 30) if financial.get("available") else None,
+         "营收与净利增速、ROE、毛利率、杠杆与现金流质量"),
+        ("momentum", "动能", 0.10, momentum_module(trend).get("score"),
+         "均线排列、MACD 与 RSI 的短线状态"),
+        ("relative", "相对强度", 0.10, scaled(peer, 15) if peer.get("available") else None,
+         "与同板块个股的估值和当日表现对比"),
+    ]
+
+    usable = [(key, label, weight, score, desc) for key, label, weight, score, desc in dims if score is not None]
+    weight_sum = sum(item[2] for item in usable)
+    index = round(sum(w * s for _, _, w, s, _ in usable) / weight_sum, 1) if weight_sum else None
+
+    breakdown = [{
+        "key": key,
+        "label": label,
+        "score": score,
+        "weight": round(weight / weight_sum * 100, 0) if weight_sum else None,
+        "base_weight": round(weight * 100, 0),
+        "detail": desc,
+        "available": score is not None,
+    } for key, label, weight, score, desc in dims]
+
+    if index is None:
+        rating, level = "数据不足", "neutral"
+    elif index >= 75:
+        rating, level = "强", "good"
+    elif index >= 60:
+        rating, level = "偏强", "good"
+    elif index >= 40:
+        rating, level = "中性", "neutral"
+    elif index >= 25:
+        rating, level = "偏弱", "bad"
+    else:
+        rating, level = "弱", "bad"
+
+    # 主要驱动：挑偏离 50 分最远的可用维度
+    drivers = []
+    for key, label, _, score, _ in usable:
+        drivers.append({"label": label, "score": score, "impact": round(score - 50, 1)})
+    drivers.sort(key=lambda d: d["impact"], reverse=True)
+
+    # 指数高不代表马上涨：把"便宜但在下跌"这类情况单独提示出来
+    raw_scores = {key: score for key, _, _, score, _ in dims}
+    cautions: list[str] = []
+    bias = position.get("bias")
+    momentum_value = raw_scores.get("momentum")
+    if bias is not None and bias < -10 and momentum_value is not None and momentum_value < 50:
+        cautions.append("价格在年线下方且动能偏弱：估值便宜不等于马上上涨，属于下跌趋势中的左侧位置，"
+                        "更适合分批观察而不是一次性重仓")
+    if bias is not None and bias > 25:
+        cautions.append("价格显著高于年线，存在均值回归压力")
+    if bias is not None and position.get("slope_trend") == "下行" and bias < -10:
+        cautions.append("年线仍在下行，长期趋势尚未转好，位置分的高分来自“相对自己历史便宜”")
+
+    return {
+        "index": index,
+        "rating": rating,
+        "rating_level": level,
+        "breakdown": breakdown,
+        "cautions": cautions,
+        "drivers": {"positive": drivers[:2], "negative": [d for d in drivers[-2:] if d["impact"] < 0]},
+        "raw": raw_scores,
+        "method": "位置与年线 30% + 估值 25% + 财务 25% + 动能 10% + 相对强度 10%，缺数据的维度按剩余权重归一化",
+        "disclaimer": "这是按固定规则算出来的相对评分，不是统计意义上的上涨概率，也不能预测短期涨跌；"
+                      "它只回答“按这套标准，这只股票目前的条件处在什么水平”。",
+    }
 
 
 def build(code: str, name: str | None, quote: dict, kline: list[dict], financials: list[dict],
@@ -323,11 +500,16 @@ def build(code: str, name: str | None, quote: dict, kline: list[dict], financial
     valuation_mod = valuation_module(valuation)
     financial = financial_module(financials)
     peer = peer_module(peers, quote)
+    position = position_module(kline)
+    recommendation = recommendation_module(position, valuation_mod, financial, trend, peer)
 
-    total = sum(m.get("score") or 0 for m in (trend, valuation_mod, financial, peer))
-    rating, rating_level = rating_of(total)
+    total = recommendation["index"] or 0
+    rating, rating_level = recommendation["rating"], recommendation["rating_level"]
 
     sentences = []
+    if position.get("available"):
+        sentences.append(f"位置与年线，现价相对年线 {position['bias']:+.1f}%（该股历史 {position['bias_percentile']:.0f}% 分位），"
+                         f"年线{position['slope_trend']}。")
     if trend.get("available"):
         above_year = bool(trend["ma"]["ma250"]) and trend["close"] > trend["ma"]["ma250"]
         sentences.append(f"技术上，{trend['alignment']}，现价 {trend['close']} 元位于年线"
@@ -380,12 +562,8 @@ def build(code: str, name: str | None, quote: dict, kline: list[dict], financial
         "max_score": 100,
         "rating": rating,
         "rating_level": rating_level,
-        "dimensions": {
-            "trend": {"score": trend.get("score"), "max": 30, "available": trend.get("available")},
-            "valuation": {"score": valuation_mod.get("score"), "max": 25, "available": valuation_mod.get("available")},
-            "financial": {"score": financial.get("score"), "max": 30, "available": financial.get("available")},
-            "peer": {"score": peer.get("score"), "max": 15, "available": peer.get("available")},
-        },
+        "recommendation": recommendation,
+        "position": position,
         "trend": trend,
         "valuation": valuation_mod,
         "financial": financial,
