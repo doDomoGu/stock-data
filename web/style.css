@@ -29,6 +29,8 @@ html, body {
   font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
   font-size: 15px;
   line-height: 1.5;
+  /* 数字等宽：价格从 38.72 变成 9.85 时不会左右跳动 */
+  font-variant-numeric: tabular-nums;
   overflow-x: hidden;
 }
 
@@ -232,6 +234,13 @@ th, td { padding: 9px 10px; text-align: right; border-bottom: 1px solid var(--bo
 th:first-child, td:first-child { text-align: left; position: sticky; left: 0; background: var(--card); }
 th { color: var(--muted); font-weight: 500; font-size: 11.5px; }
 tbody tr.is-self td { background: rgba(76, 141, 255, 0.1); font-weight: 600; }
+/* 表格里的数字用等宽字体 + 等宽数字，逐位对齐，方便横向比对；
+   中文（公司名、报告期）会自然回退到系统中文黑体 */
+th, td {
+  font-family: "SFMono-Regular", ui-monospace, Menlo, Consolas, "Liberation Mono", monospace;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.1px;
+}
 
 /* ---------------------------------------------------------------- 个股二级导航 */
 /* 自选是上级页面，概览/走势/财务/同业只属于当前这只股票；
