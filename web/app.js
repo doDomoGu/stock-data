@@ -602,7 +602,6 @@
       state.lastRefresh = Date.now();
       renderOverview(data);
       if (hard) toast('已强制刷新（行情/K线/同业已回源）');
-      if (state.tab !== 'overview') loadTab(state.tab, force);
     }).catch(function (err) {
       // 自动刷新失败时不要把整页切成错误态，提示一下即可
       if (!quiet) throw err;
@@ -696,7 +695,9 @@
     Array.prototype.forEach.call(document.querySelectorAll('.tab-panel'), function (p) {
       p.hidden = p.getAttribute('data-panel') !== tab;
     });
-    Array.prototype.forEach.call(document.querySelectorAll('.tabbar__item'), function (b) {
+    // 二级导航只属于个股页，首页没有
+    $('stockTabs').hidden = isHome;
+    Array.prototype.forEach.call(document.querySelectorAll('.subtabs__item'), function (b) {
       b.classList.toggle('is-active', b.getAttribute('data-tab') === tab);
     });
     // 顶栏随视图切换：首页是"我的自选"，个股页显示股票与收藏按钮
@@ -711,6 +712,13 @@
     requestAnimationFrame(resizeCharts);
   }
 
+  function stockUrl(code, tab) {
+    var qs = '?code=' + code;
+    if (tab && tab !== 'overview') qs += '&tab=' + tab;
+    if (state.token) qs += '&token=' + encodeURIComponent(state.token);
+    return qs;
+  }
+
   function enterHome() {
     switchTab('home');
     loadHome(false);
@@ -721,21 +729,27 @@
     if (push) history.pushState({ home: true }, '', state.token ? '?token=' + encodeURIComponent(state.token) : '?');
   }
 
-  function enterStock(code, name) {
+  function enterStock(code, name, tab) {
+    if (!name) {
+      // 从历史返回时 URL 里没有名称，用已加载的自选或最近查看补上，避免闪一下"加载中…"
+      var known = ((state.home && state.home.items) || []).filter(function (i) { return i.code === code; })[0];
+      name = known && known.name;
+    }
     state.code = code;
     state.data = { overview: null, kline: null, financial: null, peers: null };
     state.isFav = false;
     localStorage.setItem(STORAGE.code, code);
     rememberRecent(code, name);
-    $('stockName').textContent = name || '加载中…';
+    $('stockName').textContent = name || code;
     $('stockCode').textContent = code;
-    loadTab('overview', true);
+    loadTab(tab || 'overview', true);
+    // 直接打开走势/财务/同业时没有名称，后台补一次概览（走缓存，很快）拿名称与收藏状态
+    if (!name && tab && tab !== 'overview') loadOverview(false, true);
   }
 
   function openStock(code, name) {
-    enterStock(code, name);
-    var qs = '?code=' + code + (state.token ? '&token=' + encodeURIComponent(state.token) : '');
-    history.pushState({ code: code }, '', qs);
+    enterStock(code, name, 'overview');
+    history.pushState({ code: code }, '', stockUrl(code, 'overview'));
     closeSearch();
   }
 
@@ -1006,7 +1020,7 @@
   function routeFromUrl() {
     var params = new URLSearchParams(location.search);
     var code = params.get('code');
-    if (code) { enterStock(code, null); }
+    if (code) { enterStock(code, null, params.get('tab') || 'overview'); }
     else { enterHome(); }
   }
 
@@ -1015,15 +1029,13 @@
     state.token = params.get('token') || localStorage.getItem(STORAGE.token) || '';
     if (state.token) localStorage.setItem(STORAGE.token, state.token);
 
-    Array.prototype.forEach.call(document.querySelectorAll('.tabbar__item'), function (btn) {
+    // 个股页的二级标签：切换视图并把 tab 记进 URL，刷新/前进后退都能回到同一视图
+    Array.prototype.forEach.call(document.querySelectorAll('.subtabs__item'), function (btn) {
       btn.addEventListener('click', function () {
         var tab = btn.getAttribute('data-tab');
-        if (tab === 'home') {
-          showHome(true);
-        } else {
-          if (!state.code) state.code = localStorage.getItem(STORAGE.code) || '601021';
-          loadTab(tab);
-        }
+        if (!state.code) return;
+        loadTab(tab);
+        history.replaceState({ code: state.code, tab: tab }, '', stockUrl(state.code, tab));
       });
     });
 
@@ -1074,7 +1086,7 @@
     startAutoRefresh();
 
     if (params.get('code')) {
-      enterStock(params.get('code'), null);
+      enterStock(params.get('code'), null, params.get('tab') || 'overview');
     } else {
       enterHome();
     }

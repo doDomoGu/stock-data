@@ -37,6 +37,14 @@
     </button>
   </header>
 
+  <!-- 个股页的二级导航：只属于当前这只股票，随个股页显示/隐藏 -->
+  <nav class="subtabs" id="stockTabs" hidden>
+    <button class="subtabs__item is-active" data-tab="overview">概览</button>
+    <button class="subtabs__item" data-tab="trend">走势</button>
+    <button class="subtabs__item" data-tab="financial">财务</button>
+    <button class="subtabs__item" data-tab="peers">同业</button>
+  </nav>
+
   <main id="main">
     <!-- 首页：自选列表 -->
     <section class="tab-panel" data-panel="home">
@@ -137,29 +145,6 @@
       <button class="btn" id="btnRetry">重试</button>
     </div>
   </main>
-
-  <nav class="tabbar">
-    <button class="tabbar__item is-active" data-tab="home">
-      <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M12 3 3 10h2v10h6v-6h2v6h6V10h2L12 3Z" fill="currentColor"/></svg>
-      <span>自选</span>
-    </button>
-    <button class="tabbar__item" data-tab="overview">
-      <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M4 13h6V4H4v9Zm0 7h6v-5H4v5Zm10 0h6V11h-6v9Zm0-16v5h6V4h-6Z" fill="currentColor"/></svg>
-      <span>概览</span>
-    </button>
-    <button class="tabbar__item" data-tab="trend">
-      <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M4 19h16v-1.5H5.5V5H4v14Zm3-3 3.5-4 3 2.5L19 8.5 17.8 7.4l-5 4.6-3-2.5L5.8 14 7 15.2Z" fill="currentColor"/></svg>
-      <span>走势</span>
-    </button>
-    <button class="tabbar__item" data-tab="financial">
-      <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M4 20h16v-1.5H5.5V4H4v16Zm3.5-2.5h2.5V10H7.5v7.5Zm4.5 0h2.5V6H12v11.5Zm4.5 0H19V13h-2.5v4.5Z" fill="currentColor"/></svg>
-      <span>财务</span>
-    </button>
-    <button class="tabbar__item" data-tab="peers">
-      <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M8 11a3 3 0 1 0 0-6 3 3 0 0 0 0 6Zm8 0a3 3 0 1 0 0-6 3 3 0 0 0 0 6ZM8 13c-3 0-6 1.5-6 3.5V19h12v-2.5C14 14.5 11 13 8 13Zm8 0c-.6 0-1.2.05-1.7.15 1.05.9 1.7 2 1.7 3.35V19h6v-2.5c0-2-3-3.5-6-3.5Z" fill="currentColor"/></svg>
-      <span>同业</span>
-    </button>
-  </nav>
 
   <!-- 搜索层 -->
   <div class="search" id="searchLayer" hidden>
