@@ -1,0 +1,20 @@
+web/app.js
+  s_b9b6c5d78257c8::t_ea2696ddd5ace0 670-677,680
+  s_b9b6c5d78257c8::t_a6800ffbecaf7d 1074
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.50-trip",
+  "base_commit_sha": "a6fc739dc24a868f95ba154ec8a5262f9fd4799b",
+  "prompts": {},
+  "sessions": {
+    "s_b9b6c5d78257c8": {
+      "agent_id": {
+        "tool": "chengxiaobang",
+        "id": "s_8xpepwftd0sz",
+        "model": "auto(free)"
+      },
+      "human_author": "gulingjun <gulingjun@trip.com>"
+    }
+  }
+}
