@@ -37,14 +37,6 @@
     </button>
   </header>
 
-  <!-- 个股页的二级导航：只属于当前这只股票，随个股页显示/隐藏 -->
-  <nav class="subtabs" id="stockTabs" hidden>
-    <button class="subtabs__item is-active" data-tab="overview">概览</button>
-    <button class="subtabs__item" data-tab="trend">走势</button>
-    <button class="subtabs__item" data-tab="financial">财务</button>
-    <button class="subtabs__item" data-tab="peers">同业</button>
-  </nav>
-
   <main id="main">
     <!-- 首页：自选列表 -->
     <section class="tab-panel" data-panel="home">
@@ -145,6 +137,14 @@
       <button class="btn" id="btnRetry">重试</button>
     </div>
   </main>
+
+  <!-- 个股页的二级导航：固定在底部，只属于当前这只股票 -->
+  <nav class="subtabs" id="stockTabs" hidden>
+    <button class="subtabs__item is-active" data-tab="overview">概览</button>
+    <button class="subtabs__item" data-tab="trend">走势</button>
+    <button class="subtabs__item" data-tab="financial">财务</button>
+    <button class="subtabs__item" data-tab="peers">同业</button>
+  </nav>
 
   <!-- 搜索层 -->
   <div class="search" id="searchLayer" hidden>

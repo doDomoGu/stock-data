@@ -697,6 +697,7 @@
     });
     // 二级导航只属于个股页，首页没有
     $('stockTabs').hidden = isHome;
+    document.body.classList.toggle('is-stock', !isHome);
     Array.prototype.forEach.call(document.querySelectorAll('.subtabs__item'), function (b) {
       b.classList.toggle('is-active', b.getAttribute('data-tab') === tab);
     });
