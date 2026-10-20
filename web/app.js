@@ -667,11 +667,17 @@
     $('stateBlock').hidden = true;
     switchTab(tab, true);
     if (tab === 'home') { loadHome(force, false, hard); return; }
-    var loader = { overview: loadOverview, trend: loadTrend, financial: loadFinancial, peers: loadPeers }[tab];
-    if (!loader) return;
+    // 各加载函数参数不同，显式分派，避免把 hard 传错位置（overview 的第二个参数是 quiet）
+    var promise;
+    if (tab === 'overview') promise = loadOverview(force, false, hard);
+    else if (tab === 'trend') promise = loadTrend(force, hard);
+    else if (tab === 'peers') promise = loadPeers(force, hard);
+    else if (tab === 'financial') promise = loadFinancial(force);
+    else return;
+
     var spinner = $('btnRefresh');
     spinner.classList.add('is-spinning');
-    loader(force, hard).catch(function (err) {
+    promise.catch(function (err) {
       if (err.unauthorized) {
         showState(err.message);
       } else {
@@ -1065,6 +1071,7 @@
     window.addEventListener('orientationchange', function () { setTimeout(resizeCharts, 250); });
     document.addEventListener('visibilitychange', function () { if (!document.hidden) resizeCharts(); });
     window.addEventListener('popstate', routeFromUrl);
+    startAutoRefresh();
 
     if (params.get('code')) {
       enterStock(params.get('code'), null);
