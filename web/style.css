@@ -165,7 +165,9 @@ main {
 .badge--neutral { color: var(--muted); background: rgba(139, 153, 171, 0.12); border-color: rgba(139, 153, 171, 0.3); }
 
 .dim-list { display: flex; flex-direction: column; gap: 8px; margin-top: 12px; }
-.dim { display: grid; grid-template-columns: 4.5em 1fr 3.5em; align-items: center; gap: 8px; font-size: 12px; }
+/* 标签列按最长的「位置与年线」留足宽度，窄屏也不折行 */
+.dim { display: grid; grid-template-columns: 5.6em minmax(0, 1fr) 3.2em; align-items: center; gap: 8px; font-size: 12px; }
+.dim__label { white-space: nowrap; }
 .dim__bar { height: 6px; border-radius: 999px; background: var(--card-2); overflow: hidden; }
 .dim__fill { height: 100%; border-radius: 999px; background: var(--accent); }
 .dim__fill--good { background: var(--up); }
