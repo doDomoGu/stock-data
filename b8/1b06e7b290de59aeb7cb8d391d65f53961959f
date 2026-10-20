@@ -1,0 +1,20 @@
+web/style.css
+  s_b9b6c5d78257c8::t_db4411eb8db42a 237-243
+  s_b9b6c5d78257c8::t_a0e1ed92df5ea9 32-33
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.50-trip",
+  "base_commit_sha": "b81b06e7b290de59aeb7cb8d391d65f53961959f",
+  "prompts": {},
+  "sessions": {
+    "s_b9b6c5d78257c8": {
+      "agent_id": {
+        "tool": "chengxiaobang",
+        "id": "s_8xpepwftd0sz",
+        "model": "auto(free)"
+      },
+      "human_author": "gulingjun <gulingjun@trip.com>"
+    }
+  }
+}
