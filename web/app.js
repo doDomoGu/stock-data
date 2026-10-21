@@ -708,9 +708,49 @@
     if (isHome) {
       $('stockName').textContent = '我的自选';
       $('stockCode').textContent = state.home && state.home.count ? state.home.count + ' 只' : '';
+    } else if (!state.data[tab === 'trend' ? 'kline' : tab]) {
+      // 该视图还没有这只股票的数据（刚切股票或刚点刷新）：
+      // 先把上一只股票的残留内容换成骨架，避免看到别人的数字
+      showSkeleton(tab);
     }
     if (!silent) window.scrollTo({ top: 0, behavior: 'smooth' });
     requestAnimationFrame(resizeCharts);
+  }
+
+  function disposeChart(key) {
+    if (state.charts[key]) {
+      state.charts[key].dispose();
+      delete state.charts[key];
+    }
+  }
+
+  function skeletonLines() {
+    return '<div class="skeleton sk-line"></div><div class="skeleton sk-line sk-line--short"></div>';
+  }
+
+  function showSkeleton(tab) {
+    if (tab === 'overview') {
+      $('priceCard').innerHTML = '<div class="skeleton skeleton--xl"></div><div class="skeleton sk-gap"></div>';
+      ['scoreCard', 'keyMetrics', 'valuationCard', 'signalCard', 'riskCard'].forEach(function (id) {
+        $(id).innerHTML = '<div class="skeleton sk-line"></div><div class="skeleton sk-line"></div>' +
+          '<div class="skeleton sk-line sk-line--short"></div>';
+      });
+    } else if (tab === 'trend') {
+      disposeChart('kline');
+      $('chartKline').innerHTML = '<div class="skeleton sk-chart"></div>';
+      $('techMetrics').innerHTML = skeletonLines();
+    } else if (tab === 'financial') {
+      disposeChart('revenue');
+      disposeChart('profit');
+      $('finLatest').innerHTML = skeletonLines();
+      $('chartRevenue').innerHTML = '<div class="skeleton sk-chart"></div>';
+      $('chartProfitability').innerHTML = '<div class="skeleton sk-chart"></div>';
+      $('finTable').innerHTML = '';
+    } else if (tab === 'peers') {
+      $('peerSummary').innerHTML = skeletonLines();
+      $('peerTable').innerHTML = '<tbody><tr><td><div class="skeleton sk-line"></div></td></tr>' +
+        '<tr><td><div class="skeleton sk-line"></div></td></tr></tbody>';
+    }
   }
 
   function stockUrl(code, tab) {

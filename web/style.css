@@ -339,6 +339,11 @@ body.is-stock .toast { bottom: calc(56px + var(--safe-bottom) + 16px); }
   animation: shimmer 1.3s ease-in-out infinite;
 }
 .skeleton--xl { height: 34px; width: 60%; }
+/* 骨架屏占位尺寸：跟随真实内容的高度，避免加载完成后页面跳动 */
+.sk-line { height: 13px; margin: 11px 0; }
+.sk-line--short { width: 55%; }
+.sk-gap { height: 46px; margin-top: 14px; }
+.sk-chart { height: 250px; border-radius: 10px; margin: 4px 0; }
 @keyframes shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
 
 .state-block { text-align: center; padding: 40px 20px; color: var(--muted); font-size: 14px; }
