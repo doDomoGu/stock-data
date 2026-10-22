@@ -1,0 +1,39 @@
+app/analysis.py
+  s_b9b6c5d78257c8::t_e1d2e64fd5956c 611
+  s_b9b6c5d78257c8::t_a63e2634548a50 497-610,612-642
+app/main.py
+  s_b9b6c5d78257c8::t_612435371e17bc 345-374
+web/app.js
+  s_b9b6c5d78257c8::t_4b8e1a8b7b237c 17
+  s_b9b6c5d78257c8::t_61f018d1454c49 1012-1013
+  s_b9b6c5d78257c8::t_a1be1a36eb474e 929-1011,1014-1028
+  s_b9b6c5d78257c8::t_569ebd10d75a59 1173-1175
+  s_b9b6c5d78257c8::t_693abb50328f74 768
+  s_b9b6c5d78257c8::t_83de8c28eedaed 773-779,797-799
+  s_b9b6c5d78257c8::t_0dbc3140d4d2f4 1322
+web/index.html
+  s_b9b6c5d78257c8::t_aefcffe9c08179 57-63,65-76
+  s_b9b6c5d78257c8::t_632c293bdafb97 64
+  s_b9b6c5d78257c8::t_ae2041f7b9ea4c 46
+web/style.css
+  s_b9b6c5d78257c8::t_d7a7f266ae5d99 441-453
+app/datasource.py
+  s_b9b6c5d78257c8::t_de8986857a2f57 589-683
+  s_b9b6c5d78257c8::t_447c64048e972c 13
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.51-trip",
+  "base_commit_sha": "2d1a07dc94f3113d55efd00a72205fbd27fde585",
+  "prompts": {},
+  "sessions": {
+    "s_b9b6c5d78257c8": {
+      "agent_id": {
+        "tool": "chengxiaobang",
+        "id": "s_8xpepwftd0sz",
+        "model": "auto(free)"
+      },
+      "human_author": "gulingjun <gulingjun@trip.com>"
+    }
+  }
+}
