@@ -342,6 +342,36 @@ def _cached_analysis(code: str) -> dict | None:
     return analysis.build(code, quote.get("name"), quote, rows, fin, valuation, peers)
 
 
+@app.get("/api/market")
+def market_overview(refresh: int = 0):
+    """A 股大盘：主要指数行情 + 上证趋势/量能/涨跌停宽度，缓存 5 分钟。"""
+    key = "market:overview"
+    ttl = 5 * 60
+    if not refresh:
+        cached = store.cache_get(key, ttl)
+        if cached:
+            return _ok(cached)
+    try:
+        data = datasource.fetch_market_overview()
+    except DataSourceError as exc:
+        stale = store.cache_get(key, -1)
+        if stale:
+            stale = dict(stale)
+            stale["stale"] = True
+            return _ok(stale)
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+
+    payload = {
+        "indices": data["indices"],
+        "limit_up": data["limit_up"],
+        "limit_down": data["limit_down"],
+        "trade_date": data["trade_date"],
+        "analysis": analysis.market_module(data["sh_kline"], data["limit_up"], data["limit_down"]),
+    }
+    store.cache_set(key, payload)
+    return _ok(payload)
+
+
 @app.get("/api/hot")
 def hot_stocks(limit: int = Query(10, ge=5, le=20), refresh: int = 0):
     """每日热门榜：东财人气榜 + 腾讯批量报价，10 分钟内走缓存。"""

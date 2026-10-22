@@ -10,6 +10,7 @@ import random
 import re
 import threading
 import time
+from datetime import datetime
 from typing import Any
 
 import requests
@@ -585,3 +586,98 @@ def fetch_hot_stocks(limit: int = 10) -> dict:
     if not items:
         raise DataSourceError("热门榜数据不可用")
     return {"source": "amount", "items": items}
+
+
+# ---------------------------------------------------------------- 大盘
+
+MARKET_INDICES = [
+    ("sh000001", "上证指数"),
+    ("sz399001", "深证成指"),
+    ("sz399006", "创业板指"),
+    ("sh000300", "沪深300"),
+    ("sh000905", "中证500"),
+    ("sh000688", "科创50"),
+]
+
+
+def fetch_market_indices() -> list[dict]:
+    """主要指数实时行情：腾讯一次批量取完。"""
+    symbols = ",".join(sym for sym, _ in MARKET_INDICES)
+    text = _get_text(f"https://qt.gtimg.cn/q={symbols}", referer="https://gu.qq.com/")
+    parsed: dict[str, dict] = {}
+    for line in text.split(";"):
+        match = re.search(r'v_(\w+)="(.*)"', line)
+        if not match:
+            continue
+        f = match.group(2).split("~")
+        if len(f) < 40:
+            continue
+        amount_wan = _num(f[37])
+        parsed[match.group(1)] = {
+            "price": _num(f[3]),
+            "change": _num(f[31]),
+            "pct_chg": _num(f[32]),
+            "high": _num(f[33]),
+            "low": _num(f[34]),
+            "volume": _num(f[36]),
+            "amount": None if amount_wan is None else round(amount_wan * 10000, 2),
+        }
+    out = []
+    for symbol, fallback_name in MARKET_INDICES:
+        item = {"symbol": symbol, "name": parsed.get(symbol, {}).get("name") or fallback_name}
+        item.update(parsed.get(symbol) or {})
+        out.append(item)
+    if not any(item.get("price") for item in out):
+        raise DataSourceError("指数行情不可用")
+    return out
+
+
+def fetch_index_kline(symbol: str = "sh000001", limit: int = 400) -> list[dict]:
+    """指数日线：腾讯的 day 数据（指数不做复权）。"""
+    raw = _get(
+        "https://web.ifzq.gtimg.cn/appstock/app/fqkline/get",
+        {"param": f"{symbol},day,,,{min(limit, 640)},"},
+    )
+    node = ((raw or {}).get("data") or {}).get(symbol) or {}
+    rows = node.get("day") or []
+    out = []
+    for row in rows:
+        if len(row) < 6:
+            continue
+        out.append({
+            "date": row[0], "open": _num(row[1]), "close": _num(row[2]),
+            "high": _num(row[3]), "low": _num(row[4]), "volume": _num(row[5]),
+        })
+    if not out:
+        raise DataSourceError(f"指数日线为空：{symbol}")
+    return out
+
+
+def _limit_pool_count(kind: str, date_str: str) -> int:
+    """涨停/跌停家数：东财涨停池、跌停池接口返回的 tc 字段。"""
+    url = ("https://push2ex.eastmoney.com/getTopicZTPool" if kind == "up"
+           else "https://push2ex.eastmoney.com/getTopicDTPool")
+    raw = _get(url, {
+        "ut": "7eea3edcaed734bea9cbfc24409ed989", "dpt": "wz.ztzt", "Pageindex": 0,
+        "pagesize": 1, "sort": "fbt:asc" if kind == "up" else "fund:asc", "date": date_str,
+    }, referer="https://quote.eastmoney.com/")
+    return int(((raw or {}).get("data") or {}).get("tc") or 0)
+
+
+def fetch_market_overview() -> dict:
+    indices = fetch_market_indices()
+    kline = fetch_index_kline("sh000001", 400)
+    today = datetime.now().strftime("%Y%m%d")
+    limit_up = limit_down = None
+    try:
+        limit_up = _limit_pool_count("up", today)
+        limit_down = _limit_pool_count("down", today)
+    except DataSourceError:
+        pass
+    return {
+        "indices": indices,
+        "sh_kline": kline,
+        "limit_up": limit_up,
+        "limit_down": limit_down,
+        "trade_date": kline[-1]["date"],
+    }

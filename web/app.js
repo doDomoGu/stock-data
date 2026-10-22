@@ -14,6 +14,7 @@
     isFav: false,
     home: null,
     hot: null,
+    market: null,
     homeTab: 'hot',
     favCodes: [],
     loaded: { overview: false, trend: false, financial: false, peers: false },
@@ -764,11 +765,18 @@
   function enterHome() {
     switchTab('home');
     if (state.homeTab === 'fav') loadHome(false);
+    else if (state.homeTab === 'market') loadMarket(false);
     else loadHot(false);
   }
 
   function syncHomeHeader() {
-    var isHot = state.homeTab !== 'fav';
+    var tab = state.homeTab;
+    if (tab === 'market') {
+      $('stockName').textContent = 'A 股大盘';
+      $('stockCode').textContent = state.market && state.market.trade_date ? state.market.trade_date : '';
+      return;
+    }
+    var isHot = tab !== 'fav';
     $('stockName').textContent = isHot ? '今日热门' : '我的自选';
     if (isHot) {
       $('stockCode').textContent = state.hot && state.hot.items ? state.hot.items.length + ' 只' : '';
@@ -786,7 +794,9 @@
       p.hidden = p.getAttribute('data-home-panel') !== tab;
     });
     if (state.tab === 'home') syncHomeHeader();
-    if (tab === 'hot') loadHot(false); else loadHome(false);
+    if (tab === 'hot') loadHot(false);
+    else if (tab === 'market') loadMarket(false);
+    else loadHome(false);
     if (!silent) window.scrollTo({ top: 0, behavior: 'smooth' });
   }
 
@@ -914,6 +924,106 @@
     });
     card.appendChild(add);
     return card;
+  }
+
+  /* ------------------------------------------------------------ 首页：大盘 */
+
+  function loadMarket(force, quiet, hard) {
+    if (state.market && !force) { renderMarket(state.market); return Promise.resolve(); }
+    var spinner = $('btnRefresh');
+    if (!quiet) spinner.classList.add('is-spinning');
+    return api('/api/market' + (hard ? '?refresh=1' : '')).then(function (data) {
+      state.market = data;
+      state.lastRefresh = Date.now();
+      renderMarket(data);
+      if (hard) toast('大盘数据已强制刷新');
+    }).catch(function (err) {
+      if (quiet) { toast('大盘刷新失败：' + (err.message || '未知错误')); return; }
+      toast(err.message || '大盘加载失败');
+      showState('大盘加载失败：' + (err.message || '未知错误'), function () { loadMarket(true); });
+    }).then(function () {
+      spinner.classList.remove('is-spinning');
+    });
+  }
+
+  function renderMarket(payload) {
+    var a = payload.analysis || {};
+    var ind = a.indicators || {};
+
+    var box = $('marketSummary');
+    box.innerHTML = '';
+    var top = el('div', 'hero__top');
+    var numBox = el('div', 'hero__num-box');
+    numBox.appendChild(el('div', 'metric__label', '大盘温度'));
+    numBox.innerHTML += '<div class="hero__num' + (a.status_level ? ' hero__num--' + a.status_level : '') + '">' +
+      (a.index === null || a.index === undefined ? '—' : num(a.index, 0)) + '<small> / 100</small></div>';
+    top.appendChild(numBox);
+    var side = el('div', 'hero__side');
+    side.appendChild(el('span', 'badge badge--' + (a.status_level || 'neutral'), a.status || '—'));
+    side.appendChild(el('div', 'hero__hint', '趋势 50 · 量能 20 · 宽度 30'));
+    top.appendChild(side);
+    box.appendChild(top);
+    if (a.summary) box.appendChild(el('p', 'conclusion', a.summary));
+
+    // 主要指数
+    var idx = $('marketIndices');
+    idx.innerHTML = '';
+    idx.appendChild(el('h3', 'card__title', '主要指数'));
+    var grid = el('div', 'index-grid');
+    (payload.indices || []).forEach(function (item) {
+      var cell = el('div', 'index-cell');
+      cell.appendChild(el('div', 'index-cell__name', item.name));
+      cell.appendChild(el('div', 'index-cell__price ' + trendClass(item.pct_chg), num(item.price)));
+      cell.appendChild(el('div', 'index-cell__pct ' + trendClass(item.pct_chg), signed(item.pct_chg, 2, '%')));
+      grid.appendChild(cell);
+    });
+    idx.appendChild(grid);
+
+    // 趋势与量能
+    var trendBox = $('marketTrend');
+    trendBox.innerHTML = '';
+    trendBox.appendChild(el('h3', 'card__title', '上证指数 · 趋势与量能'));
+    var g = el('div', 'metric-grid');
+    g.appendChild(metric('现价', num(ind.close)));
+    g.appendChild(metric('MA20', num(ind.ma20)));
+    g.appendChild(metric('MA60', num(ind.ma60)));
+    g.appendChild(metric('MA250', num(ind.ma250)));
+    g.appendChild(metric('20 日乖离', signed(ind.bias20, 1, '%')));
+    g.appendChild(metric('年线乖离', signed(ind.bias250, 1, '%')));
+    g.appendChild(metric('RSI(14)', num(ind.rsi14)));
+    g.appendChild(metric('量比 5/20', num(ind.volume_ratio)));
+    g.appendChild(metric('一年区间分位',
+      ind.range_position && ind.range_position.pct !== null ? num(ind.range_position.pct, 0) + '%' : '—'));
+    trendBox.appendChild(g);
+
+    // 宽度
+    var breadth = $('marketBreadth');
+    breadth.innerHTML = '';
+    breadth.appendChild(el('h3', 'card__title', '市场宽度 · 涨跌停'));
+    var bg = el('div', 'metric-grid');
+    bg.appendChild(metric('涨停', String(payload.limit_up === null || payload.limit_up === undefined ? '—' : payload.limit_up), 'up'));
+    bg.appendChild(metric('跌停', String(payload.limit_down === null || payload.limit_down === undefined ? '—' : payload.limit_down), 'down'));
+    var ratio = (payload.limit_up !== null && payload.limit_down !== null && payload.limit_down > 0)
+      ? (payload.limit_up / payload.limit_down).toFixed(1) + ' : 1' : '—';
+    bg.appendChild(metric('涨跌停比', ratio));
+    breadth.appendChild(bg);
+
+    // 信号明细
+    var sig = $('marketSignals');
+    sig.innerHTML = '';
+    if ((a.signals || []).length) {
+      sig.appendChild(el('h3', 'card__title', '信号明细'));
+      a.signals.forEach(function (s) {
+        var row = el('div', 'signal');
+        row.appendChild(el('span', 'signal__dot signal__dot--' + (s.level || 'neutral')));
+        var body = el('div', 'signal__body');
+        body.appendChild(el('div', 'signal__label', s.label));
+        body.appendChild(el('div', 'signal__detail', s.detail));
+        row.appendChild(body);
+        sig.appendChild(row);
+      });
+    }
+    if (state.tab === 'home') syncHomeHeader();
   }
 
   /* ------------------------------------------------------------ 首页：自选列表 */
@@ -1060,7 +1170,9 @@
 
   function refreshCurrent(quiet, hard) {
     if (state.tab === 'home') {
-      return state.homeTab === 'hot' ? loadHot(true, quiet, hard) : loadHome(true, quiet, hard);
+      if (state.homeTab === 'hot') return loadHot(true, quiet, hard);
+      if (state.homeTab === 'market') return loadMarket(true, quiet, hard);
+      return loadHome(true, quiet, hard);
     }
     if (state.tab === 'overview') return loadOverview(true, quiet, hard);
     // 走势/财务/同业的数据变化慢，重绘还会丢掉图表的缩放状态，自动刷新时交给手动
@@ -1207,6 +1319,7 @@
       // 手动刷新一律强制回源，绕开服务端缓存
       if (state.tab === 'home') {
         if (state.homeTab === 'hot') loadHot(true, false, true);
+        else if (state.homeTab === 'market') loadMarket(true, false, true);
         else loadHome(true, false, true);
         return;
       }

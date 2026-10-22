@@ -43,6 +43,7 @@
       <div class="home-tabs" id="homeTabs">
         <button class="home-tabs__item is-active" data-home-tab="hot">热门</button>
         <button class="home-tabs__item" data-home-tab="fav">自选</button>
+        <button class="home-tabs__item" data-home-tab="market">大盘</button>
       </div>
 
       <div data-home-panel="hot">
@@ -51,6 +52,26 @@
         </div>
         <div class="fav-list" id="hotList"></div>
         <p class="home-note" id="hotNote"></p>
+      </div>
+
+      <div data-home-panel="market" hidden>
+        <div class="card market-hero" id="marketSummary">
+          <div class="skeleton skeleton--xl"></div>
+        </div>
+        <div class="card" id="marketIndices"></div>
+        <div class="card" id="marketTrend"></div>
+        <div class="card" id="marketBreadth"></div>
+        <div class="card" id="marketSignals"></div>
+        <details class="card notice-card">
+          <summary>大盘看什么（和个股有什么不同）</summary>
+          <div class="howto">
+            <p><b>没有财报可看</b>：指数是成分股的加权结果，单家公司的营收利润不直接决定指数走势，所以大盘分析不看 ROE、毛利率这些。</p>
+            <p><b>趋势</b>：均线排列与年线位置最重要。指数站上/跌破 20、60、250 日线，代表不同周期的资金成本。</p>
+            <p><b>量能</b>：上涨是否放量、下跌是否缩量，比单只股票的成交量更有意义——它反映的是全市场资金态度。</p>
+            <p><b>宽度</b>：涨停与跌停家数反映赚钱效应。指数涨但只有少数权重股在涨，说明参与度差。</p>
+            <p><b>估值</b>：指数也有 PE/PB 分位（如沪深300），但需要专门的指数估值数据源，当前版本未接入。</p>
+          </div>
+        </details>
       </div>
 
       <div data-home-panel="fav" hidden>

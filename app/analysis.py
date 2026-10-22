@@ -494,6 +494,152 @@ def recommendation_module(position: dict, valuation: dict, financial: dict,
     }
 
 
+def market_module(kline: list[dict], limit_up: int | None, limit_down: int | None) -> dict:
+    """大盘分析：个股看估值与财报，大盘看趋势、量能、市场宽度。
+
+    这里只用指数自身的价量数据 + 涨跌停家数，不涉及公司财务。
+    """
+    closes = [r["close"] for r in kline]
+    highs = [r["high"] for r in kline]
+    lows = [r["low"] for r in kline]
+    volumes = [r["volume"] or 0 for r in kline]
+    if len(closes) < 260:
+        return {"available": False, "reason": "指数日线不足 260 个交易日"}
+
+    s = ind.series(closes, highs, lows, volumes)
+    last = -1
+    close = closes[last]
+    prev = closes[-2] if len(closes) > 1 else close
+    pct = round((close / prev - 1) * 100, 2) if prev else None
+    ma5, ma20 = s["ma5"][last], s["ma20"][last]
+    ma60, ma250 = s["ma60"][last], s["ma250"][last]
+    macd = s["macd"]
+    dif, dea, hist = macd["dif"][last], macd["dea"][last], macd["hist"][last]
+    rsi14 = s["rsi14"][last]
+    vol5, vol20 = s["vol_ma5"][last], s["vol_ma20"][last]
+    vol_ratio = round(vol5 / vol20, 2) if vol5 and vol20 else None
+    position = ind.range_position(closes, 250)
+    bias20 = round((close / ma20 - 1) * 100, 2) if ma20 else None
+    bias250 = round((close / ma250 - 1) * 100, 2) if ma250 else None
+
+    signals: list[dict] = []
+    score = 0
+
+    def add(label: str, level: str, detail: str) -> None:
+        signals.append({"label": label, "level": level, "detail": detail})
+
+    # 趋势 50 分
+    if ma20 is not None:
+        if close > ma20:
+            score += 15
+        add("20 日线", "good" if close > ma20 else "bad",
+            f"收 {close:.2f}，MA20 {ma20:.2f}，{'站上' if close > ma20 else '跌破'}")
+    if ma60 is not None:
+        if close > ma60:
+            score += 10
+        add("60 日线", "good" if close > ma60 else "bad",
+            f"MA60 {ma60:.2f}，{'在均线上方' if close > ma60 else '在均线下方'}")
+    if ma250 is not None:
+        if close > ma250:
+            score += 10
+        add("年线", "good" if close > ma250 else "bad",
+            f"MA250 {ma250:.2f}，乖离 {bias250:+.1f}%")
+    if hist is not None:
+        if dif > dea and hist > 0:
+            score += 8
+        add("MACD", "good" if dif > dea and hist > 0 else "bad",
+            f"DIF {dif:.2f} / DEA {dea:.2f}，柱状 {hist:+.2f}")
+    if ma20 is not None and ma60 is not None:
+        bull = ma20 > ma60
+        if bull:
+            score += 7
+        add("中期均线", "good" if bull else "bad",
+            f"MA20 {'高于' if bull else '低于'} MA60（{'多头' if bull else '空头'}结构）")
+
+    # 量能 20 分
+    volume_score = 12
+    if vol_ratio is not None and pct is not None:
+        if vol_ratio >= 1.15:
+            volume_score = 18 if pct > 0 else 6
+        elif vol_ratio <= 0.85:
+            volume_score = 12 if pct > 0 else 10
+        add("量能", "good" if volume_score >= 15 else "bad" if volume_score <= 8 else "neutral",
+            f"5 日均量是 20 日均量的 {vol_ratio:.2f} 倍，"
+            f"{'放量' if vol_ratio >= 1.15 else '缩量' if vol_ratio <= 0.85 else '量能平稳'}")
+    score += volume_score
+
+    # 市场宽度 30 分
+    breadth_score = 15
+    if limit_up is not None and limit_down is not None:
+        if limit_up == 0 and limit_down == 0:
+            breadth_score = 15
+        else:
+            ratio = limit_up / max(limit_down, 1)
+            if ratio >= 5:
+                breadth_score = 30
+            elif ratio >= 3:
+                breadth_score = 26
+            elif ratio >= 1.5:
+                breadth_score = 20
+            elif ratio >= 1:
+                breadth_score = 14
+            elif ratio >= 0.5:
+                breadth_score = 8
+            else:
+                breadth_score = 3
+            if limit_up >= 60:
+                breadth_score = min(30, breadth_score + 2)
+            elif limit_up <= 10:
+                breadth_score = max(0, breadth_score - 3)
+        add("涨跌停", "good" if breadth_score >= 20 else "bad" if breadth_score < 14 else "neutral",
+            f"涨停 {limit_up} 家 / 跌停 {limit_down} 家")
+    score += breadth_score
+
+    index = min(100, max(0, round(score, 1)))
+    if index >= 75:
+        status, level = "强势", "good"
+    elif index >= 60:
+        status, level = "偏强", "good"
+    elif index >= 40:
+        status, level = "震荡", "neutral"
+    elif index >= 25:
+        status, level = "偏弱", "bad"
+    else:
+        status, level = "弱势", "bad"
+
+    summary = (f"上证指数 {close:.2f}（{pct:+.2f}%），"
+               f"{'站上' if ma20 and close > ma20 else '跌破'} 20 日线，"
+               f"{'在年线上方' if ma250 and close > ma250 else '在年线下方'}；"
+               f"5 日均量/20 日均量 {vol_ratio if vol_ratio is not None else '—'}；"
+               f"涨停 {limit_up if limit_up is not None else '—'} 家 / 跌停 {limit_down if limit_down is not None else '—'} 家。")
+
+    return {
+        "available": True,
+        "index": index,
+        "status": status,
+        "status_level": level,
+        "signals": signals,
+        "summary": summary,
+        "indicators": {
+            "close": round(close, 2),
+            "pct_chg": pct,
+            "ma5": ma5, "ma20": ma20, "ma60": ma60, "ma250": ma250,
+            "bias20": bias20, "bias250": bias250,
+            "rsi14": rsi14,
+            "macd": {"dif": dif, "dea": dea, "hist": hist},
+            "range_position": position,
+            "volume_ratio": vol_ratio,
+        },
+        "breadth": {"limit_up": limit_up, "limit_down": limit_down},
+        "dimensions": {"trend": 50, "volume": 20, "breadth": 30},
+        "notes": [
+            "大盘没有“公司财报”这一维度：指数由成分股加权而成，单家公司的经营数据不直接决定指数走势。",
+            "大盘更重要的是三件事：趋势（均线/年线）、量能（成交是否配合）、宽度（涨跌停与个股参与度）。",
+            "指数的 PE/PB 分位也有参考价值，但需要指数估值数据源，当前版本未接入。",
+        ],
+    }
+
+
 def build(code: str, name: str | None, quote: dict, kline: list[dict], financials: list[dict],
           valuation: list[dict], peers: dict) -> dict:
     trend = trend_module(kline)
