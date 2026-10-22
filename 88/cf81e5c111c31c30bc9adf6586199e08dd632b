@@ -1,0 +1,44 @@
+web/index.html
+  s_b9b6c5d78257c8::t_342ce2e8a56db6 41,43-65
+app/main.py
+  s_b9b6c5d78257c8::t_92794c12b1d982 345-348,357-359,361-367,369-370,372-373
+  s_b9b6c5d78257c8::t_5d319ba5a7aaf6 349-356,360,368,371
+web/app.js
+  s_b9b6c5d78257c8::t_01aa3a6238cd2d 964,968
+  s_b9b6c5d78257c8::t_3f04e4b9c54d50 770-779,788
+  s_b9b6c5d78257c8::t_85a5d8566cdd6a 766-769,780-787,789-790
+  s_b9b6c5d78257c8::t_2741d7e9a91e4e 830-873,875-903,905-918
+  s_b9b6c5d78257c8::t_7f85275995b4bb 904
+  s_b9b6c5d78257c8::t_b01ca7fd501ef4 1207-1212,1216-1219
+  s_b9b6c5d78257c8::t_a3867d17fde82c 1039
+  s_b9b6c5d78257c8::t_b72bb20f2ad424 874
+  s_b9b6c5d78257c8::t_85300eaf4eec7d 711
+  s_b9b6c5d78257c8::t_ff11e0abaa68ac 1023-1024
+  s_b9b6c5d78257c8::t_1c465ddae09b91 16-17
+  s_b9b6c5d78257c8::t_7314df7f7c1352 1062-1064
+web/style.css
+  s_b9b6c5d78257c8::t_61021a9042dd17 379-404,406-421,423,426-433,436,438-440
+  s_b9b6c5d78257c8::t_ad266525ab103d 405,422,424-425,434-435,437
+app/datasource.py
+  s_b9b6c5d78257c8::t_c0ec05efd75553 94-95
+  s_b9b6c5d78257c8::t_911ac876e35c11 467-587
+  s_b9b6c5d78257c8::t_8ee8ae2375d2be 78-93
+app/config.py
+  s_b9b6c5d78257c8::t_e089a1f44a299b 29
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.51-trip",
+  "base_commit_sha": "88cf81e5c111c31c30bc9adf6586199e08dd632b",
+  "prompts": {},
+  "sessions": {
+    "s_b9b6c5d78257c8": {
+      "agent_id": {
+        "tool": "chengxiaobang",
+        "id": "s_8xpepwftd0sz",
+        "model": "auto(free)"
+      },
+      "human_author": "gulingjun <gulingjun@trip.com>"
+    }
+  }
+}
