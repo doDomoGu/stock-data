@@ -13,6 +13,8 @@
     limit: 250,
     isFav: false,
     home: null,
+    hot: null,
+    homeTab: 'hot',
     favCodes: [],
     loaded: { overview: false, trend: false, financial: false, peers: false },
     data: { overview: null, kline: null, financial: null, peers: null },
@@ -706,8 +708,7 @@
     $('btnBack').hidden = isHome;
     $('btnStar').hidden = isHome;
     if (isHome) {
-      $('stockName').textContent = '我的自选';
-      $('stockCode').textContent = state.home && state.home.count ? state.home.count + ' 只' : '';
+      syncHomeHeader();
     } else if (!state.data[tab === 'trend' ? 'kline' : tab]) {
       // 该视图还没有这只股票的数据（刚切股票或刚点刷新）：
       // 先把上一只股票的残留内容换成骨架，避免看到别人的数字
@@ -762,7 +763,31 @@
 
   function enterHome() {
     switchTab('home');
-    loadHome(false);
+    if (state.homeTab === 'fav') loadHome(false);
+    else loadHot(false);
+  }
+
+  function syncHomeHeader() {
+    var isHot = state.homeTab !== 'fav';
+    $('stockName').textContent = isHot ? '今日热门' : '我的自选';
+    if (isHot) {
+      $('stockCode').textContent = state.hot && state.hot.items ? state.hot.items.length + ' 只' : '';
+    } else {
+      $('stockCode').textContent = state.home && state.home.count ? state.home.count + ' 只' : '';
+    }
+  }
+
+  function switchHomeTab(tab, silent) {
+    state.homeTab = tab;
+    Array.prototype.forEach.call(document.querySelectorAll('.home-tabs__item'), function (b) {
+      b.classList.toggle('is-active', b.getAttribute('data-home-tab') === tab);
+    });
+    Array.prototype.forEach.call(document.querySelectorAll('[data-home-panel]'), function (p) {
+      p.hidden = p.getAttribute('data-home-panel') !== tab;
+    });
+    if (state.tab === 'home') syncHomeHeader();
+    if (tab === 'hot') loadHot(false); else loadHome(false);
+    if (!silent) window.scrollTo({ top: 0, behavior: 'smooth' });
   }
 
   function showHome(push) {
@@ -800,6 +825,95 @@
     btn.textContent = state.isFav ? '★' : '☆';
     btn.classList.toggle('is-on', !!state.isFav);
     btn.setAttribute('aria-label', state.isFav ? '移出自选' : '加入自选');
+  }
+
+  /* ------------------------------------------------------------ 首页：每日热门 */
+
+  function loadHot(force, quiet, hard) {
+    if (state.hot && !force) { renderHot(state.hot); return Promise.resolve(); }
+    var spinner = $('btnRefresh');
+    if (!quiet) spinner.classList.add('is-spinning');
+    return api('/api/hot?limit=10' + (hard ? '&refresh=1' : '')).then(function (data) {
+      state.hot = data;
+      state.lastRefresh = Date.now();
+      renderHot(data);
+      if (hard) toast('热门榜已强制刷新');
+    }).catch(function (err) {
+      if (quiet) { toast('热门榜刷新失败：' + (err.message || '未知错误')); return; }
+      toast(err.message || '热门榜加载失败');
+      showState('热门榜加载失败：' + (err.message || '未知错误'), function () { loadHot(true); });
+    }).then(function () {
+      spinner.classList.remove('is-spinning');
+    });
+  }
+
+  function renderHot(payload) {
+    var items = payload.items || [];
+    var summary = $('hotSummary');
+    summary.innerHTML = '';
+    var row = el('div', 'home-summary__row');
+    row.appendChild(el('div', 'home-summary__count', '今日热门 Top ' + items.length));
+    var byAmount = payload.source === 'amount';
+    row.appendChild(el('div', 'home-summary__meta',
+      (byAmount ? '按成交额排序' : '按东财人气榜') + (payload.stale ? ' · 缓存' : '')));
+    summary.appendChild(row);
+    summary.appendChild(el('div', 'home-summary__note',
+      '点卡片看详情，右上角 ＋ 加入自选 · 榜单每 10 分钟更新'));
+
+    var list = $('hotList');
+    list.innerHTML = '';
+    if (!items.length) {
+      list.appendChild(el('p', 'home-empty', '暂无热门数据，稍后刷新试试。'));
+    } else {
+      items.forEach(function (item) { list.appendChild(hotCard(item)); });
+    }
+
+    $('hotNote').textContent = byAmount
+      ? '说明：人气榜暂不可用，当前按全市场成交额排序（成交额越大，通常关注度越高）。'
+      : '说明：热度来自东方财富 App 的人气榜，按关注与访问量排序，不是涨幅榜；仅供参考，不构成投资建议。';
+    if (state.tab === 'home') syncHomeHeader();
+  }
+
+  function hotCard(item) {
+    var card = el('div', 'hot-card');
+    card.setAttribute('data-code', item.code);
+    card.addEventListener('click', function (event) {
+      if (event.target.closest('.hot-card__add')) return;
+      openStock(item.code, item.name);
+    });
+
+    card.appendChild(el('div', 'hot-rank' + (item.rank <= 3 ? ' hot-rank--top' : ''), '#' + item.rank));
+
+    var main = el('div', 'fav-card__main');
+    var nameRow = el('div', 'fav-card__name');
+    nameRow.appendChild(document.createTextNode(item.name || item.code));
+    nameRow.appendChild(el('span', 'fav-card__code', item.code));
+    main.appendChild(nameRow);
+    var meta = [];
+    if (item.amount) meta.push('成交 ' + money(item.amount));
+    if (item.turnover !== null && item.turnover !== undefined) meta.push('换手 ' + num(item.turnover) + '%');
+    main.appendChild(el('div', 'fav-card__meta', meta.length ? meta.join(' · ') : '—'));
+    card.appendChild(main);
+
+    var right = el('div', 'fav-card__right');
+    right.appendChild(el('div', 'fav-card__price ' + trendClass(item.pct_chg), num(item.price)));
+    right.appendChild(el('div', 'fav-card__pct ' + trendClass(item.pct_chg), signed(item.pct_chg, 2, '%')));
+    card.appendChild(right);
+
+    var isFav = !!item.is_favorite;
+    var add = el('button', 'hot-card__add' + (isFav ? ' is-added' : ''), isFav ? '✓' : '+');
+    add.setAttribute('aria-label', isFav ? '已在自选' : '加入自选');
+    add.addEventListener('click', function (event) {
+      event.stopPropagation();
+      if (item.is_favorite) { toast('已在自选里'); return; }
+      addFavorite(item.code, item.name).then(function () {
+        item.is_favorite = true;
+        add.textContent = '✓';
+        add.classList.add('is-added');
+      });
+    });
+    card.appendChild(add);
+    return card;
   }
 
   /* ------------------------------------------------------------ 首页：自选列表 */
@@ -847,9 +961,11 @@
     list.innerHTML = '';
     if (!items.length) {
       list.appendChild(el('p', 'home-empty', '先添加几只关注的股票，首页会显示它们的价格和推荐指数。'));
+      if (state.tab === 'home') syncHomeHeader();
       return;
     }
     items.forEach(function (item) { list.appendChild(favCard(item)); });
+    if (state.tab === 'home') syncHomeHeader();
   }
 
   function favCard(item) {
@@ -904,7 +1020,8 @@
       toast('已加入自选：' + (data.name || name || code));
       if (state.code === code) { state.isFav = true; updateStar(); }
       state.home = null;
-      if (state.tab === 'home') loadHome(true);
+      // 只有在看自选列表时才立即重拉；在热门页加自选不需要打断
+      if (state.tab === 'home' && state.homeTab === 'fav') loadHome(true);
       return data;
     }).catch(function (err) {
       toast(err.message || '加入失败');
@@ -919,7 +1036,7 @@
       toast('已移出 ' + label);
       state.home = null;
       if (state.code === item.code) { state.isFav = false; updateStar(); }
-      if (state.tab === 'home') loadHome(true);
+      if (state.tab === 'home' && state.homeTab === 'fav') loadHome(true);
     }).catch(function (err) {
       toast(err.message || '移出失败');
     });
@@ -942,7 +1059,9 @@
   }
 
   function refreshCurrent(quiet, hard) {
-    if (state.tab === 'home') return loadHome(true, quiet, hard);
+    if (state.tab === 'home') {
+      return state.homeTab === 'hot' ? loadHot(true, quiet, hard) : loadHome(true, quiet, hard);
+    }
     if (state.tab === 'overview') return loadOverview(true, quiet, hard);
     // 走势/财务/同业的数据变化慢，重绘还会丢掉图表的缩放状态，自动刷新时交给手动
     return Promise.resolve();
@@ -1085,10 +1204,19 @@
     bindSeg('segRange', function (value) { state.limit = parseInt(value, 10); loadTrend(true); });
 
     $('btnRefresh').addEventListener('click', function () {
-      // 手动刷新一律强制回源，绕开服务端 60 秒的行情缓存
-      if (state.tab === 'home') { loadHome(true, false, true); return; }
+      // 手动刷新一律强制回源，绕开服务端缓存
+      if (state.tab === 'home') {
+        if (state.homeTab === 'hot') loadHot(true, false, true);
+        else loadHome(true, false, true);
+        return;
+      }
       Object.keys(state.data).forEach(function (k) { state.data[k] = null; });
       loadTab(state.tab, true, true);
+    });
+    Array.prototype.forEach.call(document.querySelectorAll('.home-tabs__item'), function (btn) {
+      btn.addEventListener('click', function () {
+        switchHomeTab(btn.getAttribute('data-home-tab'));
+      });
     });
     $('btnSearch').addEventListener('click', openSearch);
     $('btnSearchCancel').addEventListener('click', closeSearch);

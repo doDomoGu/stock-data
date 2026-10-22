@@ -75,6 +75,24 @@ def _get(url: str, params: dict[str, Any] | None = None, referer: str | None = N
     raise DataSourceError(f"数据源请求失败：{url}（{last_error}）")
 
 
+def _post_json(url: str, payload: dict, referer: str | None = None) -> Any:
+    last_error: Exception | None = None
+    for attempt in range(config.HTTP_RETRY):
+        _throttle()
+        try:
+            resp = _session.post(
+                url, json=payload, timeout=config.HTTP_TIMEOUT,
+                headers={"Referer": referer} if referer else None,
+            )
+            resp.raise_for_status()
+            return json.loads(resp.text)
+        except Exception as exc:
+            last_error = exc
+            _rotate_session()
+            time.sleep(config.HTTP_BACKOFF * (attempt + 1) + random.uniform(0, 0.3))
+    raise DataSourceError(f"数据源请求失败：{url}（{last_error}）")
+
+
 def _get_text(url: str, referer: str | None = None, encoding: str = "gbk") -> str:
     """纯文本接口（腾讯/新浪的行情是 GBK 文本，不是 JSON）。"""
     last_error: Exception | None = None
@@ -446,3 +464,124 @@ def search_stocks(keyword: str, count: int = 8) -> list[dict]:
             continue
         out.append({"code": item.get("Code"), "name": item.get("Name"), "market": item.get("SecurityTypeName")})
     return out[:count]
+
+
+# ---------------------------------------------------------------- 每日热门
+
+_POPULARITY_URL = "https://emappdata.eastmoney.com/stockrank/getAllCurrentList"
+_POPULARITY_PAYLOAD = {
+    "appId": "appId01",
+    "globalId": "786e4c21-70dc-435a-93bb-38",
+    "marketType": "",
+    "pageNo": 1,
+}
+
+
+def fetch_popularity_rank(limit: int = 10) -> list[dict]:
+    """东方财富人气榜：按 App 内关注/访问热度排序，返回 [{code, rank}]。"""
+    payload = dict(_POPULARITY_PAYLOAD, pageSize=max(limit, 10))
+    raw = _post_json(_POPULARITY_URL, payload, referer="https://emappdata.eastmoney.com/")
+    rows = (raw or {}).get("data") or []
+    out = []
+    for row in rows:
+        sc = str(row.get("sc") or "").upper()
+        if len(sc) < 8:
+            continue
+        out.append({"code": sc[2:], "rank": row.get("rk")})
+    return out[:limit]
+
+
+def fetch_quotes_batch(codes: list[str]) -> dict[str, dict]:
+    """腾讯批量报价：一个请求取多只，首页热门榜只需要 1 次出网。"""
+    if not codes:
+        return {}
+    symbols = ",".join(symbol_prefix(c) + c for c in codes)
+    text = _get_text(f"https://qt.gtimg.cn/q={symbols}", referer="https://gu.qq.com/")
+    out: dict[str, dict] = {}
+    for line in text.split(";"):
+        match = re.search(r'v_\w+="(.*)"', line)
+        if not match:
+            continue
+        f = match.group(1).split("~")
+        if len(f) < 47:
+            continue
+        code = f[2]
+        amount_wan, market_cap_yi = _num(f[37]), _num(f[45])
+        out[code] = {
+            "code": code,
+            "name": f[1],
+            "price": _num(f[3]),
+            "pct_chg": _num(f[32]),
+            "change": _num(f[31]),
+            "high": _num(f[33]),
+            "low": _num(f[34]),
+            "amount": None if amount_wan is None else round(amount_wan * 10000, 2),
+            "turnover": _num(f[38]),
+            "pe_dynamic": _num(f[39]),
+            "pb": _num(f[46]),
+            "market_cap": None if market_cap_yi is None else round(market_cap_yi * 1e8, 2),
+        }
+    return out
+
+
+def _hot_from_amount_ranking(limit: int) -> list[dict]:
+    """兜底：按成交额取全市场前 N（东财 clist，海外 IP 会被转到延时节点）。"""
+    raw = _get(
+        "https://push2.eastmoney.com/api/qt/clist/get",
+        {
+            "pn": 1, "pz": limit, "po": 1, "np": 1, "fltt": 2, "invt": 2, "fid": "f6",
+            "fs": "m:0+t:6,m:0+t:80,m:1+t:2,m:1+t:23",
+            "fields": "f12,f14,f2,f3,f6,f8,f9,f20",
+        },
+    )
+    rows = ((raw or {}).get("data") or {}).get("diff") or []
+    items = []
+    for index, row in enumerate(rows, start=1):
+        items.append({
+            "rank": index,
+            "code": row.get("f12"),
+            "name": row.get("f14"),
+            "price": _num(row.get("f2")),
+            "pct_chg": _num(row.get("f3")),
+            "amount": _num(row.get("f6")),
+            "turnover": _num(row.get("f8")),
+            "pe_dynamic": _num(row.get("f9")),
+            "market_cap": _num(row.get("f20")),
+        })
+    return items
+
+
+def fetch_hot_stocks(limit: int = 10) -> dict:
+    """每日热门榜：人气榜优先，失败时退回成交额榜。
+
+    返回里带 source 说明口径，前端据此决定标题文案。
+    """
+    try:
+        ranked = fetch_popularity_rank(limit)
+        if ranked:
+            quotes = fetch_quotes_batch([r["code"] for r in ranked])
+            items = []
+            for row in ranked:
+                quote = quotes.get(row["code"]) or {}
+                items.append({
+                    "rank": row.get("rank"),
+                    "code": row["code"],
+                    "name": quote.get("name"),
+                    "price": quote.get("price"),
+                    "pct_chg": quote.get("pct_chg"),
+                    "change": quote.get("change"),
+                    "amount": quote.get("amount"),
+                    "turnover": quote.get("turnover"),
+                    "pe_dynamic": quote.get("pe_dynamic"),
+                    "pb": quote.get("pb"),
+                    "market_cap": quote.get("market_cap"),
+                })
+            if any(item.get("name") for item in items):
+                return {"source": "popularity", "items": items}
+    except DataSourceError:
+        pass
+
+    items = _hot_from_amount_ranking(limit)
+    if not items:
+        raise DataSourceError("热门榜数据不可用")
+    return {"source": "amount", "items": items}

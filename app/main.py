@@ -342,6 +342,35 @@ def _cached_analysis(code: str) -> dict | None:
     return analysis.build(code, quote.get("name"), quote, rows, fin, valuation, peers)
 
 
+@app.get("/api/hot")
+def hot_stocks(limit: int = Query(10, ge=5, le=20), refresh: int = 0):
+    """每日热门榜：东财人气榜 + 腾讯批量报价，10 分钟内走缓存。"""
+    key = f"hot:{limit}"
+
+    def annotate(data: dict) -> dict:
+        # 收藏状态实时算，不受榜单缓存影响
+        for item in data.get("items", []):
+            item["is_favorite"] = store.is_favorite(item.get("code") or "")
+        data["server_time"] = datetime.now(CN_TZ).strftime("%Y-%m-%d %H:%M:%S")
+        return data
+
+    if not refresh:
+        cached = store.cache_get(key, config.TTL_HOT)
+        if cached:
+            return _ok(annotate(cached))
+    try:
+        data = datasource.fetch_hot_stocks(limit)
+    except DataSourceError as exc:
+        stale = store.cache_get(key, -1)
+        if stale:
+            stale = dict(stale)
+            stale["stale"] = True
+            return _ok(annotate(stale))
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    store.cache_set(key, data)
+    return _ok(annotate(data))
+
+
 @app.get("/api/favorites")
 def list_favorites(refresh: int = 0):
     items = []

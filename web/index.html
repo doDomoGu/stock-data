@@ -38,17 +38,32 @@
   </header>
 
   <main id="main">
-    <!-- 首页：自选列表 -->
+    <!-- 首页：热门 / 自选 -->
     <section class="tab-panel" data-panel="home">
-      <div class="card home-summary" id="homeSummary">
-        <div class="skeleton skeleton--xl"></div>
+      <div class="home-tabs" id="homeTabs">
+        <button class="home-tabs__item is-active" data-home-tab="hot">热门</button>
+        <button class="home-tabs__item" data-home-tab="fav">自选</button>
       </div>
-      <div class="fav-list" id="favList"></div>
-      <button class="btn btn--block" id="btnAddFavorite">＋ 添加自选股</button>
-      <p class="home-note">
-        推荐指数 = 位置与年线 30% + 估值 25% + 财务 25% + 动能 10% + 相对强度 10%。
-        它是按固定规则算出的<b>相对评分</b>，不是上涨概率，也不预测短期涨跌。
-      </p>
+
+      <div data-home-panel="hot">
+        <div class="card home-summary" id="hotSummary">
+          <div class="skeleton skeleton--xl"></div>
+        </div>
+        <div class="fav-list" id="hotList"></div>
+        <p class="home-note" id="hotNote"></p>
+      </div>
+
+      <div data-home-panel="fav" hidden>
+        <div class="card home-summary" id="homeSummary">
+          <div class="skeleton skeleton--xl"></div>
+        </div>
+        <div class="fav-list" id="favList"></div>
+        <button class="btn btn--block" id="btnAddFavorite">＋ 添加自选股</button>
+        <p class="home-note">
+          推荐指数 = 位置与年线 30% + 估值 25% + 财务 25% + 动能 10% + 相对强度 10%。
+          它是按固定规则算出的<b>相对评分</b>，不是上涨概率，也不预测短期涨跌。
+        </p>
+      </div>
     </section>
 
     <!-- 概览 -->

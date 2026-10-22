@@ -376,6 +376,68 @@ body.is-stock .toast { bottom: calc(56px + var(--safe-bottom) + 16px); }
 .empty { color: var(--muted); font-size: 13px; padding: 12px 0; }
 
 /* ---------------------------------------------------------------- 首页：自选列表 */
+.home-tabs {
+  display: flex;
+  gap: 4px;
+  padding: 3px;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+}
+.home-tabs__item {
+  flex: 1;
+  min-height: 36px;
+  border: none;
+  border-radius: 9px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 14px;
+}
+.home-tabs__item.is-active {
+  background: var(--card-2);
+  color: var(--text);
+  font-weight: 600;
+}
+
+/* 热门榜卡片：排名 + 名称 + 价格 + 收藏按钮 */
+.hot-card {
+  display: grid;
+  grid-template-columns: 38px minmax(0, 1fr) auto 32px;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 12px 12px 8px;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  cursor: pointer;
+}
+.hot-card:active { background: var(--card-2); }
+
+.hot-rank {
+  text-align: center;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+/* 前三名用金色，避免和「红涨绿跌」的语义混淆 */
+.hot-rank--top { color: #f0c040; }
+
+.hot-card__add {
+  width: 30px;
+  height: 30px;
+  border-radius: 9px;
+  border: 1px solid var(--border);
+  background: var(--card-2);
+  color: var(--accent);
+  font-size: 18px;
+  font-weight: 600;
+  line-height: 1;
+  padding: 0;
+}
+.hot-card__add.is-added { color: var(--muted); font-size: 13px; }
+
 .home-summary { padding: 14px 14px 12px; }
 .home-summary__row { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
 .home-summary__count { font-size: 18px; font-weight: 700; }

@@ -26,6 +26,7 @@ TTL_KLINE = 30 * 60       # 日线序列
 TTL_FINANCIAL = 6 * 3600  # 财报指标
 TTL_VALUATION = 12 * 3600 # 估值历史
 TTL_PEERS = 10 * 60       # 同业对比
+TTL_HOT = 10 * 60         # 热门榜：人气榜变化不快，10 分钟足够
 TTL_BOARDS = 24 * 3600    # 板块归属
 
 DEFAULT_CODE = "601021"
